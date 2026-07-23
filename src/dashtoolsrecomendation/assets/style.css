@@ -1,0 +1,402 @@
+:root {
+    --COLOR_RED: #d2051e;
+    --COLOR_BEIGE: #d7cebd;
+    --COLOR_DARK: #524f53;
+    --COLOR_TAUPE: #887f6e;
+    --COLOR_WINE: #671c3e;
+    --COLOR_WHITE: #ffffff;
+    --COLOR_BLACK: #000000;
+    /* --COLOR_BG: #f5f3ef;
+    --COLOR_BG2: #fbfaf8;
+    --COLOR_GREEN: #008000;
+    --COLOR_CARD: #F0F2F6;
+    --COLOR_CARD: rgb(215, 206, 189, 0.2);
+    --COLOR_CARD: rgb(82, 79, 83, 0.2); */
+}
+
+.stApp {
+    background: linear-gradient(135deg,
+            #242326 0%,
+            #3a373b 35%,
+            #524f53 68%,
+            #2d2a2f 100%);
+    color: var(--COLOR_WHITE);
+}
+
+.stAppToolbar {
+    background-color: var(--COLOR_DARK);
+}
+
+.block-container {
+    padding-top: 4rem;
+    padding-bottom: 1.5rem;
+    max-width: 2000px;
+}
+
+.st-key-login_layout {
+    min-height: calc(100vh - 8rem);
+    justify-content: center;
+    padding: 4vh 1rem;
+}
+
+.st-key-login_card {
+    background: var(--COLOR_WHITE);
+    border: 1px solid rgba(82, 79, 83, 0.14) !important;
+    border-top: 5px solid var(--COLOR_RED) !important;
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(82, 79, 83, 0.16);
+    padding: 2.25rem 2.5rem 1.75rem;
+}
+
+.st-key-login_card img {
+    border-radius: 0 !important;
+}
+
+.login-heading {
+    margin: 0.75rem 0 1rem;
+    text-align: center;
+}
+
+.login-heading h1 {
+    color: var(--COLOR_DARK);
+    font-size: 2rem;
+    line-height: 1.2;
+    margin: 0 0 0.5rem;
+}
+
+.login-heading p {
+    color: var(--COLOR_TAUPE);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+.st-key-login_card div[data-testid="stForm"] {
+    width: 100%;
+}
+
+.st-key-login_card div[data-testid="stTextInput"] input {
+    border-radius: 9px;
+}
+
+.st-key-login_card div[data-testid="stFormSubmitButton"] button {
+    min-height: 2.85rem;
+    border-radius: 9px;
+    font-weight: 700;
+}
+
+@media (max-width: 640px) {
+    .block-container {
+        padding-top: 1.5rem;
+    }
+
+    .st-key-login_layout {
+        min-height: calc(100vh - 3rem);
+        padding: 1rem 0;
+    }
+
+    .st-key-login_card {
+        padding: 1.75rem 1.25rem 1.25rem;
+    }
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    margin-top: 0;
+    padding: 0;
+}
+
+.header-container img {
+    height: 60px;
+    object-fit: cover;
+}
+
+.header-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--COLOR_DARK);
+    text-align: right;
+    margin-top: 0;
+}
+
+.header-title-graph {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--COLOR_WHITE);
+    text-align: right;
+    margin-top: 0;
+}
+
+.header-title p {
+    font-size: 1rem;
+    font-weight: 400;
+    margin-bottom: 0;
+}
+
+.header-title-graph p {
+    font-size: 1rem;
+    font-weight: 400;
+    margin-bottom: 0;
+    color: #b8b8d4;
+}
+
+.kpi-card {
+    background-color: var(--COLOR_CARD);
+    border-radius: 14px;
+    padding: 16px 18px;
+    border-left: 8px solid var(--COLOR_RED);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.kpi-title {
+    font-size: 13px;
+    color: var(--COLOR_TAUPE);
+    margin-bottom: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.kpi-sub {
+    font-size: 1rem;
+    /* color: var(--COLOR_WINE); */
+    color: #d6d6e7;
+    margin-top: 6px;
+    text-align: center;
+}
+
+.st-key-card1,
+.st-key-card2 {
+    margin-top: 3.5rem;
+}
+
+.st-key-card1,
+.st-key-card2,
+.st-key-card3,
+.st-key-card4 {
+    min-height: 30rem;
+}
+
+.metric-card {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 12px 14px 12px 14px;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.metric-label {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+    opacity: 0.82 !important;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    text-align: center;
+}
+
+.metric-value {
+    color: #ffffff;
+    font-size: 28px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.dashboard-title {
+    font-size: 34px;
+    font-weight: 800;
+    margin-bottom: 0px;
+}
+
+.dashboard-subtitle {
+    color: #b8b8d4;
+    font-size: 16px;
+    margin-bottom: 25px;
+}
+
+.chart-card {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Card padrão para gráficos individuais */
+div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]) {
+    /* background: rgba(255, 255, 255, 0.055); */
+    /* border: 1px solid rgba(255, 255, 255, 0.10); */
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+}
+
+/* Containers agrupadores de coluna */
+div.st-key-container-graph,
+div.st-key-container-graph-faixas,
+div.st-key-container-graph-faixas-maquinas,
+div.st-key-container-graph-maquinas-idade,
+div.st-key-container-graph-modelos-normalizados,
+div.st-key-container-ranking-modelos,
+div.st-key-container-graph-modelos-lateral {
+    /* background: rgba(255, 255, 255, 0.055); */
+    /* border: 1px solid rgba(255, 255, 255, 0.10); */
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+}
+
+/* Remove o card individual dos gráficos dentro dos containers agrupados */
+div.st-key-container-graph div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
+div.st-key-container-graph-faixas div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
+div.st-key-container-graph-faixas-maquinas div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
+div.st-key-container-graph-maquinas-idade div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
+div.st-key-container-graph-modelos-normalizados div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
+div.st-key-container-graph-modelos-lateral div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]) {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Rótulo e ajuda do seletor de idade no mesmo branco dos títulos dos gráficos */
+.st-key-idade_corte_reparacoes [data-testid="stWidgetLabel"],
+.st-key-idade_corte_reparacoes [data-testid="stWidgetLabel"] p,
+.st-key-idade_corte_reparacoes [data-testid="stTooltipIcon"] {
+    color: var(--COLOR_WHITE) !important;
+}
+
+.st-key-idade_corte_resumo [data-testid="stWidgetLabel"],
+.st-key-idade_corte_resumo [data-testid="stWidgetLabel"] p,
+.st-key-idade_corte_resumo [data-testid="stTooltipIcon"] {
+    color: var(--COLOR_WHITE) !important;
+}
+
+/* .st-key-idade_corte_reparacoes [data-testid="stTooltipIcon"] svg {
+    stroke: var(--COLOR_WHITE) !important;
+} */
+
+/* Abas inativas legíveis no fundo escuro; a ativa mantém o vermelho do tema. */
+div[data-testid="stTabs"] [data-testid="stTab"]:not([data-selected]),
+div[data-testid="stTabs"] [data-testid="stTab"]:not([data-selected]) * {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+    opacity: 1 !important;
+}
+
+div[data-testid="stTabs"] [data-testid="stTab"]:not([data-selected]):hover,
+div[data-testid="stTabs"] [data-testid="stTab"]:not([data-selected]):hover * {
+    color: var(--COLOR_WHITE) !important;
+    -webkit-text-fill-color: var(--COLOR_WHITE) !important;
+}
+
+/* Troca os KPIs no navegador, sem rerun e sem o clarão entre as abas. */
+.st-key-cards-dashboard-ams {
+    display: none;
+}
+
+div[data-testid="stMainBlockContainer"]:has(.st-key-aba_dashboard [data-testid="stTab"]:nth-child(2)[data-selected]) .st-key-cards-dashboard-geral {
+    display: none;
+}
+
+div[data-testid="stMainBlockContainer"]:has(.st-key-aba_dashboard [data-testid="stTab"]:nth-child(2)[data-selected]) .st-key-cards-dashboard-ams {
+    display: block;
+}
+
+/* Rótulo, ajuda e botão do uploader com o mesmo contraste dos títulos dos cards. */
+.st-key-dados_upload [data-testid="stWidgetLabel"],
+.st-key-dados_upload [data-testid="stWidgetLabel"] *,
+.st-key-dados_upload [data-testid="stTooltipIcon"] {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+    opacity: 1 !important;
+}
+
+.st-key-dados_upload [data-testid="stTooltipIcon"] svg {
+    stroke: #d6d6e7 !important;
+}
+
+.st-key-dados_upload [data-testid="stFileUploaderDropzone"] [data-testid^="stBaseButton"],
+.st-key-dados_upload [data-testid="stFileUploaderDropzone"] [data-testid^="stBaseButton"] * {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+}
+
+.st-key-dados_upload [data-testid="stFileUploaderDropzone"] [data-testid^="stBaseButton"] {
+    background: #524f53 !important;
+    border-color: #d6d6e7 !important;
+}
+
+.st-key-dados_upload [data-testid="stFileUploaderDropzone"] [data-testid^="stBaseButton"]:hover,
+.st-key-dados_upload [data-testid="stFileUploaderDropzone"] [data-testid^="stBaseButton"]:focus-visible {
+    background: var(--COLOR_RED) !important;
+    border-color: var(--COLOR_RED) !important;
+}
+
+/* Rótulo do filtro por número de série no fundo escuro. */
+.st-key-filtro_numero_serie [data-testid="stWidgetLabel"],
+.st-key-filtro_numero_serie [data-testid="stWidgetLabel"] * {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+    opacity: 1 !important;
+}
+
+/* Rótulo do seletor de colunas na aba Base filtrada. */
+.st-key-colunas [data-testid="stWidgetLabel"],
+.st-key-colunas [data-testid="stWidgetLabel"] * {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+    opacity: 1 !important;
+}
+
+.st-key-colunas [data-testid="stWidgetLabel"],
+.st-key-colunas [data-testid="stWidgetLabel"] * {
+    color: #d6d6e7 !important;
+    -webkit-text-fill-color: #d6d6e7 !important;
+    opacity: 1 !important;
+}
+
+.st-key-btn_cancelar_atalho {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.method-note {
+    margin: 0.8rem 0 1rem;
+    padding: 0.8rem 1rem;
+    border-left: 4px solid var(--COLOR_RED);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.055);
+    color: #d6d6e7;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.method-note strong {
+    color: var(--COLOR_WHITE);
+}
+
+/* Mantém os KPIs legíveis quando seis cards são exibidos na mesma linha. */
+@media (min-width: 1000px) {
+    .metric-label {
+        font-size: 13px !important;
+    }
+
+    .metric-value {
+        font-size: 24px;
+    }
+
+    .kpi-sub {
+        font-size: 0.78rem;
+        min-height: 2.2rem;
+    }
+}
