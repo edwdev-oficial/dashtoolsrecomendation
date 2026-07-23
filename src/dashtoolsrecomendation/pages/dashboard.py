@@ -21,6 +21,7 @@ from dashtoolsrecomendation.utils import (
 
 
 def prepare_df() -> pd.DataFrame:
+
     return dashboard_data.preparar_dashboard(
         st.session_state.df_pq,
         get_data_ids.get(),
@@ -137,6 +138,7 @@ def _render_ranking(base: pd.DataFrame, limit: int = 12) -> None:
 
 
 def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
+
     if df_ams.empty or "ano_reparo" not in df_ams.columns:
         return []
     anos = (
@@ -157,16 +159,14 @@ def show() -> None:
         st.warning("Não existem dados para geração do dashboard.")
         return
 
-
     df_dashboard = prepare_df()
     df_ams = st.session_state.get("df_ams", pd.DataFrame())
-
-    st.dataframe(df_dashboard)
     
     anos = _anos_disponiveis(df_ams)
     if not anos:
         st.warning(
-            "A base AMS não possui registros a partir de 2024. "
+            f"A base AMS não possui registros a partir de "
+            f"{renewal_analysis.ANALYSIS_START_YEAR}. "
             "O dashboard precisa dessa janela para a análise de manutenção."
         )
         return
@@ -178,8 +178,9 @@ def show() -> None:
         default=anos,
         key="filtro_anos_ams",
         help=(
-            "A análise começa em 2024 porque o histórico anterior não representa "
-            "todas as manutenções realizadas pelo cliente."
+            f"A análise começa em {renewal_analysis.ANALYSIS_START_YEAR} porque "
+            "o histórico anterior não representa todas as manutenções "
+            "realizadas pelo cliente."
         ),
     )
     if not anos_selecionados:
@@ -255,11 +256,11 @@ def show() -> None:
         <div class="method-note">
             <strong>Escopo metodológico:</strong> reparações registradas pela Hilti de
             {ano_inicial} a {ano_final}{complemento_periodo}. O histórico anterior a
-            2024 não é tratado como histórico completo, pois parte das manutenções era
-            realizada na oficina do cliente. Os valores de custo usam fator
-            <strong>{fator_impostos:.2f}</strong> sobre o Net Price. Esta base mede
-            frequência e custo; disponibilidade, tempo parado e produtividade exigem
-            datas de entrada/saída ou dados operacionais adicionais.
+            {renewal_analysis.ANALYSIS_START_YEAR} não é tratado como histórico completo,
+            pois parte das manutenções era realizada na oficina do cliente. Os valores
+            de custo usam fator <strong>{fator_impostos:.2f}</strong> sobre o Net Price.
+            Esta base mede frequência e custo; disponibilidade, tempo parado e
+            produtividade exigem datas de entrada/saída ou dados operacionais adicionais.
         </div>
         """,
         unsafe_allow_html=True,
