@@ -177,26 +177,29 @@ def _grafico_faixa_rosca(
 
 
 def grafico_reparacoes_por_faixa_idade(df: pd.DataFrame) -> Figure:
+    # return _grafico_faixa_barra(
+    #     df, "Quantidade de reparos", "Reparações por faixa de idade", "Reparações"
+    # )
     return _grafico_faixa_barra(
-        df, "Quantidade de reparos", "Reparações por faixa de idade", "Reparações"
+        df, "Reparações", "Reparações por faixa de idade", "Reparações"
     )
 
 
 def grafico_percentual_reparacoes_por_faixa_idade(df: pd.DataFrame) -> Figure:
     return _grafico_faixa_rosca(
-        df, "Quantidade de reparos", "Percentual de reparações por faixa", "Reparações"
+        df, "Reparações", "Percentual de reparações por faixa", "Reparações"
     )
 
 
 def grafico_maquinas_por_faixa_idade(df: pd.DataFrame) -> Figure:
     return _grafico_faixa_barra(
-        df, "Quantidade de máquinas", "Máquinas por faixa de idade", "Máquinas"
+        df, "Máquinas", "Máquinas por faixa de idade", "Máquinas"
     )
 
 
 def grafico_percentual_maquinas_por_faixa_idade(df: pd.DataFrame) -> Figure:
     return _grafico_faixa_rosca(
-        df, "Quantidade de máquinas", "Percentual de máquinas por faixa", "Máquinas"
+        df, "Máquinas", "Percentual de máquinas por faixa", "Máquinas"
     )
 
 
@@ -334,6 +337,34 @@ def grafico_reparacoes_por_maquina_faixa(df: pd.DataFrame) -> Figure:
         y="Reparações por máquina",
         text="Reparações por máquina",
         title="Frequência observada por faixa etária",
+        labels={
+            "Faixa etária": "Idade atual (anos)",
+            "Reparações por máquina": "Reparações por máquina",
+        },
+        color="Faixa etária",
+        color_discrete_sequence=[RED, BEIGE],
+    )
+    fig.update_traces(
+        texttemplate="%{text:.2f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x} anos</b><br>Reparações por máquina: %{y:.2f}"
+            "<extra></extra>"
+        ),
+    )
+    configurar_layout(fig, altura=360)
+    fig.update_layout(showlegend=False)
+    return fig
+
+
+def grafico_reparacoes_por_maquina_faixa2(df: pd.DataFrame) -> Figure:
+    fig = px.bar(
+        df,
+        x="Faixa etária",
+        y="Reparações por máquina",
+        text="Reparações por máquina",
+        title="Frequência observada por faixa etária2",
         labels={
             "Faixa etária": "Idade atual (anos)",
             "Reparações por máquina": "Reparações por máquina",

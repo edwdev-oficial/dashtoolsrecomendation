@@ -5,7 +5,15 @@ import streamlit as st
 from dashtoolsrecomendation.utils import loaders
 
 
-GRAPH_TITLES = {"Dashboard", "Dashboard 2"}
+GRAPH_TITLES = {
+    "Dashboard",
+    "Dashboard 2",
+    "Carregar dados",
+    "Listas",
+    "Adicionar TLM",
+    "Configurações",
+    "Teste"
+}
 
 
 def render(title: str, subtitle: str) -> None:

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-ANALYSIS_START_YEAR = 2017
+ANALYSIS_START_YEAR = 1900
 DEFAULT_TAX_FACTOR = 1.4
 SERIAL_COLUMNS = ("Número de Série", "Número de série")
 

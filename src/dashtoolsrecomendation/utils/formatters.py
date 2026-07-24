@@ -11,3 +11,6 @@ def br_num(number: float, decimals: float, use_brl: bool=False) -> str:
     
     s = f'{number:,.{decimals}f}'
     return s.replace(',', '|').replace('.', ',').replace('|', '.')
+
+def date_br(date):
+    return date.strftime('%d/%m/%Y')

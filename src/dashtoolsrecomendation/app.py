@@ -10,8 +10,11 @@ from dashtoolsrecomendation.pages import (
     listas,
     dashboard,
     add_tlm,
+    config,
     teste,
 )
+
+from dashtoolsrecomendation.services import get_config
 
 def main():
     st.set_page_config(
@@ -21,6 +24,7 @@ def main():
     )
 
     loaders.load('style', 'css')
+    get_config.config()
 
     if not auth.is_authenticated():
         auth.render_login()
@@ -54,6 +58,12 @@ def main():
             'title': 'Adicionar TLM',
             'subtitle': 'Adicione tipo linha e modelo para os itens listados',
             'show': add_tlm.show
+        }
+        pages['Config'] = {
+            'icon': 'gear',
+            'title': 'Configurações',
+            'subtitle': 'Configurações administradas',
+            'show': config.show
         }
         pages['Teste'] = {
             'icon': 'folder',

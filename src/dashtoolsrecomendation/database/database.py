@@ -23,3 +23,6 @@ def get_collection_tlm():
 
 def get_collection_normal_itens():
     return get_database()["normal_itens"]
+
+def get_collection_config():
+    return get_database()['config']

@@ -136,7 +136,6 @@ def _render_ranking(base: pd.DataFrame, limit: int = 12) -> None:
     download_xlsx.download(df=_analytical_table(base, None), key='ranking')
 
 
-
 def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
 
     if df_ams.empty or "ano_reparo" not in df_ams.columns:
@@ -152,6 +151,7 @@ def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
 
 
 def show() -> None:
+
     if "df_pq" not in st.session_state:
         st.warning("Carregue os arquivos do parque de máquinas e os relatórios AMS.")
         return
@@ -250,17 +250,17 @@ def show() -> None:
     ano_inicial = min(anos_selecionados)
     ano_final = max(anos_selecionados)
     parcial = ano_final == pd.Timestamp(data_corte).year
-    complemento_periodo = " até a data de corte" if parcial else ""
+    complemento_periodo = f" até {formatters.date_br(data_corte)}" if parcial else ""
     st.markdown(
         f"""
         <div class="method-note">
             <strong>Escopo metodológico:</strong> reparações registradas pela Hilti de
             {ano_inicial} a {ano_final}{complemento_periodo}. O histórico anterior a
             {renewal_analysis.ANALYSIS_START_YEAR} não é tratado como histórico completo,
-            pois parte das manutenções era realizada na oficina do cliente. Os valores
-            de custo usam fator <strong>{fator_impostos:.2f}</strong> sobre o Net Price.
+            pois, ou não existem manutenções anteriores ou eram realizadas na oficina do cliente. Os valores
+            de custo usam fator <strong>{fator_impostos:.2f}</strong> sobre o Net Price para o cálculo aproximado de impostos.
             Esta base mede frequência e custo; disponibilidade, tempo parado e
-            produtividade exigem datas de entrada/saída ou dados operacionais adicionais.
+            custo de oportunidade exigem datas de entrada/saída ou dados operacionais adicionais.
         </div>
         """,
         unsafe_allow_html=True,
@@ -277,6 +277,7 @@ def show() -> None:
     )
 
     with tab_resumo:
+
         idade_maxima = max(1, int(base["Idade atual"].max()))
         idade_corte = st.number_input(
             "Idade de corte para comparação",
@@ -332,19 +333,91 @@ def show() -> None:
                 dashboard_charts.grafico_maquinas_por_idade(idade),
                 width="stretch",
             )
+
+
+            if st.session_state['config']['relacaoReparosIdade']:
+                with st.container(key="container-graph-faixas"):
+                    pass
+                    idade_maxima = max(0, int(idade['idade_int (a)'].max()))
+                    idade_maxima = max(0, 10)
+                    idade_corte_key = "idade_corte_reparacoes"
+
+                    if idade_corte_key not in st.session_state:
+                        st.session_state[idade_corte_key] = min(5, idade_maxima)
+                    else:
+                        st.session_state[idade_corte_key] = min(
+                            max(0, int(st.session_state[idade_corte_key])),
+                            idade_maxima,
+                        )
+
+                    idade_corte = st.number_input(
+                        "Idade de corte das máquinas",
+                        min_value=0,
+                        max_value=idade_maxima,
+                        step=1,
+                        key=idade_corte_key,
+                        help=(
+                            "Compara as reparações em máquinas com idade até o "
+                            "limite selecionado e acima dele."
+                        ),
+                        width=260,
+                    )
+
+                    grafico_faixas, grafico_percentual = st.columns(2)
+
+                    with grafico_faixas:
+                        st.plotly_chart(
+                            dashboard_charts.grafico_reparacoes_por_faixa_idade(faixas),
+                            width="stretch",
+                        )
+
+                    with grafico_percentual:
+                        st.plotly_chart(
+                            dashboard_charts.grafico_percentual_reparacoes_por_faixa_idade(faixas),
+                            width="stretch",
+                        )
+
             st.plotly_chart(
                 dashboard_charts.grafico_reparacoes_por_maquina_faixa(faixas),
                 width="stretch",
             )
-        with right:
-            st.plotly_chart(
-                dashboard_charts.grafico_matriz_prioridade(base),
-                width="stretch",
-            )
-            st.plotly_chart(
-                dashboard_charts.grafico_custo_por_maquina_faixa(faixas),
-                width="stretch",
-            )
+
+            with right:
+                st.plotly_chart(
+                    dashboard_charts.grafico_matriz_prioridade(base),
+                    width="stretch",
+                )
+
+                if st.session_state['config']['relacaoReparosIdade']:
+
+                    with st.container(key="container-graph-faixas-maquinas"):
+                        # Compensa o espaço ocupado pelo seletor no container
+                        # equivalente da coluna esquerda, mantendo os cards e
+                        # os gráficos alinhados verticalmente.
+                        st.space(68)
+
+                        grafico_maquinas, grafico_percentual_maquinas = st.columns(2)
+
+                        with grafico_maquinas:
+                            st.plotly_chart(
+                                dashboard_charts.grafico_maquinas_por_faixa_idade(
+                                    faixas
+                                ),
+                                width="stretch",
+                            )
+
+                        with grafico_percentual_maquinas:
+                            st.plotly_chart(
+                                dashboard_charts.grafico_percentual_maquinas_por_faixa_idade(
+                                    faixas
+                                ),
+                                width="stretch",
+                            )
+
+                st.plotly_chart(
+                    dashboard_charts.grafico_custo_por_maquina_faixa(faixas),
+                    width="stretch",
+                )
 
         _render_ranking(base, None)
 
@@ -493,6 +566,20 @@ def show() -> None:
                 ),
             },
         )
+
+        texto = f'''
+            registros localizados
+        '''
+        df_config.footer_df(
+            _analytical_table(selected, None),
+            f'''
+            máquinas selecionadas para renovação
+            que juntas somam {formatters.br_num(selected['Reparações no período'].sum(), 0)} reparações 
+            com custo total de {formatters.br_num(selected['Custo com impostos'].sum(), 2)}
+            '''
+        )
+        download_xlsx.download(df=_analytical_table(selected, None), key='renovacao')
+
         with st.expander("Como o índice de prioridade é calculado"):
             st.markdown(
                 """
