@@ -525,21 +525,42 @@ def grafico_evolucao_reparacoes(df: pd.DataFrame) -> Figure:
 def grafico_evolucao_custos(df: pd.DataFrame) -> Figure:
     import plotly.graph_objects as go
 
+    def rotulo_moeda_inteira(valor: float) -> str:
+        return f"R$ {float(valor):,.0f}".replace(",", ".")
+
+    adicional = (df["Custo projetado"] - df["Custo realizado"]).clip(lower=0)
+    tem_projecao = adicional.gt(0)
+    rotulos_realizados = [
+        None if projetado else rotulo_moeda_inteira(valor)
+        for valor, projetado in zip(df["Custo realizado"], tem_projecao)
+    ]
+
     fig = go.Figure()
     fig.add_bar(
         x=df["Ano"],
         y=df["Custo realizado"],
         name="Realizado",
         marker_color=TAUPE,
+        text=rotulos_realizados,
+        texttemplate="%{text}",
+        textposition="outside",
+        cliponaxis=False,
         hovertemplate="<b>%{x}</b><br>Realizado: R$ %{y:,.2f}<extra></extra>",
     )
-    adicional = (df["Custo projetado"] - df["Custo realizado"]).clip(lower=0)
-    if adicional.gt(0).any():
+    if tem_projecao.any():
+        rotulos_projetados = [
+            rotulo_moeda_inteira(total) if projetado else None
+            for total, projetado in zip(df["Custo projetado"], tem_projecao)
+        ]
         fig.add_bar(
             x=df["Ano"],
             y=adicional,
             name="Projeção adicional",
             marker_color=BEIGE,
+            text=rotulos_projetados,
+            texttemplate="%{text}",
+            textposition="outside",
+            cliponaxis=False,
             hovertemplate="<b>%{x}</b><br>Projeção adicional: R$ %{y:,.2f}<extra></extra>",
         )
     fig.update_layout(barmode="stack", title="Custo de reparações por ano")
