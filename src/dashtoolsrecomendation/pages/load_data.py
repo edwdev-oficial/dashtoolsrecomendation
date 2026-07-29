@@ -190,7 +190,7 @@ def show():
                 # '''
                 # df_config.footer_df(df_pq, texto)
                 
-                download_xlsx.download(df_pq, 'dowload_pq')
+                # download_xlsx.download(df_pq, 'dowload_pq')
 
                 df_pq['Pago pelo Cliente'] = df_pq['Custo de Reparo']
                 st.session_state.df_pq = df_pq
@@ -216,7 +216,7 @@ def show():
         
             df_ams = data_processing.preparar_ams(pd.concat(dfs_ams))
             # st.dataframe(df_ams)
-            st.subheader('AMS Report Brazil', divider='red')
+            # st.subheader('AMS Report Brazil', divider='red')
 
             df_ams.rename(columns={'Nome do Material': 'Descrição'}, inplace=True)
             df_ams, df_not_normalizer = normalizar_itens(df_ams)
@@ -225,50 +225,50 @@ def show():
             # ========================================================
             # region FILTER DF_AMS
             # ========================================================
-            if 'series_ams' not in st.session_state:
-                st.session_state.series_ams = []
-            input_serie_ams, clear_filter_ams, _ = st.columns(
-                [2, 1, 4],
-                vertical_alignment="bottom",
-            )
+            # if 'series_ams' not in st.session_state:
+            #     st.session_state.series_ams = []
+            # input_serie_ams, clear_filter_ams, _ = st.columns(
+            #     [2, 1, 4],
+            #     vertical_alignment="bottom",
+            # )
 
-            with input_serie_ams:
-                serie_ams = st.text_input(
-                    'Número de Série',
-                    key='filtro_numero_serie_ams',
-                )
-            with clear_filter_ams:
-                if st.button(
-                    'Limpar Filtro',
-                    type='primary',
-                    key='limpar_filtro_ams'
-                ):
-                    st.session_state.series_ams = []
+            # with input_serie_ams:
+            #     serie_ams = st.text_input(
+            #         'Número de Série',
+            #         key='filtro_numero_serie_ams',
+            #     )
+            # with clear_filter_ams:
+            #     if st.button(
+            #         'Limpar Filtro',
+            #         type='primary',
+            #         key='limpar_filtro_ams'
+            #     ):
+            #         st.session_state.series_ams = []
 
-            if serie_ams:
-                st.session_state.series_ams.append(serie_ams)
-                series_ams = st.session_state.series_ams
-                df_ams = df_ams[
-                    (df_ams['Número de Série'].isin(series_ams))
+            # if serie_ams:
+            #     st.session_state.series_ams.append(serie_ams)
+            #     series_ams = st.session_state.series_ams
+            #     df_ams = df_ams[
+            #         (df_ams['Número de Série'].isin(series_ams))
                     
-                ]
+            #     ]
             # endregion
             # ========================================================
 
-            st.subheader('df_ams')
-            st.dataframe(df_ams)
+            # st.subheader('df_ams')
+            # st.dataframe(df_ams)
             st.session_state.df_ams = df_ams
-            texto = f'''
-                registros localizados em df_ams,
-                {int(df_ams['# Notif.'].sum())} ordems e 
-                {int(df_ams['# Reparos'].sum())} reparos,
-                Custo reparo: R$ {df_config.sum_column(df_ams, 'Custo de Reparos', True)} 
-                Pago pelo Cliente: R$ {df_config.sum_column(df_ams, 'Pagado pelo Cliente', True)}
-                Economia: R$ {df_config.sum_column(df_ams, 'Economia', True)}
-            '''
-            df_config.footer_df(df_ams, texto)
+            # texto = f'''
+            #     registros localizados em df_ams,
+            #     {int(df_ams['# Notif.'].sum())} ordems e 
+            #     {int(df_ams['# Reparos'].sum())} reparos,
+            #     Custo reparo: R$ {df_config.sum_column(df_ams, 'Custo de Reparos', True)} 
+            #     Pago pelo Cliente: R$ {df_config.sum_column(df_ams, 'Pagado pelo Cliente', True)}
+            #     Economia: R$ {df_config.sum_column(df_ams, 'Economia', True)}
+            # '''
+            # df_config.footer_df(df_ams, texto)
             df_ams['Número de série'] = ''
-            download_xlsx.download(df_ams, 'dowload_ams')
+            # download_xlsx.download(df_ams, 'dowload_ams')
             df_ams.drop(columns=['Número de série'], inplace=True)
 
             if not df_not_normalizer.empty:
@@ -280,11 +280,10 @@ def show():
                 st.stop()
             st.session_state.df_ams = df_ams                
 
+            # st.divider()
 
-            st.divider()
 
-
-            st.subheader('DF_AMS', divider='red')
+            # st.subheader('DF_AMS', divider='red')
             df_series_mais_de_um_id = (
                 df_ams.groupby(["Número de Série", "Nome do Material"], as_index=False)
                 .agg(
@@ -293,16 +292,16 @@ def show():
                 )
             )
 
-            st.dataframe(df_series_mais_de_um_id)
+            # st.dataframe(df_series_mais_de_um_id)
 
             df_series_mais_de_um_id = df_series_mais_de_um_id[
                 df_series_mais_de_um_id["qtd_ids"] > 1
             ]
 
-            st.dataframe(df_series_mais_de_um_id)
+            # st.dataframe(df_series_mais_de_um_id)
 
-            st.write(df_series_mais_de_um_id['Número de Série'].value_counts())
-            st.subheader('', divider='red')
+            # st.write(df_series_mais_de_um_id['Número de Série'].value_counts())
+            # st.subheader('', divider='red')
 
 
             # ========================================================
@@ -310,22 +309,22 @@ def show():
             # ========================================================
             df_ams_group = data_processing.agrupar_ams(df_ams)
 
-            st.subheader('df_ams_group')
-            st.dataframe(df_ams_group)
-            texto = f'''
-                registros localizados em df_ams,
-                {int(df_ams_group['# Notif.'].sum())} ordems e 
-                {int(df_ams_group['# Reparos'].sum())} reparos,
-                Custo reparo: R$ {df_config.sum_column(df_ams_group, 'Custo de Reparos', True)} 
-                Pago pelo Cliente: R$ {df_config.sum_column(df_ams_group, 'Pagado pelo Cliente', True)}
-                Economia: R$ {df_config.sum_column(df_ams_group, 'Economia', True)}
-            '''
-            df_config.footer_df(df_ams_group, texto)
+            # st.subheader('df_ams_group')
+            # st.dataframe(df_ams_group)
+            # texto = f'''
+            #     registros localizados em df_ams,
+            #     {int(df_ams_group['# Notif.'].sum())} ordems e 
+            #     {int(df_ams_group['# Reparos'].sum())} reparos,
+            #     Custo reparo: R$ {df_config.sum_column(df_ams_group, 'Custo de Reparos', True)} 
+            #     Pago pelo Cliente: R$ {df_config.sum_column(df_ams_group, 'Pagado pelo Cliente', True)}
+            #     Economia: R$ {df_config.sum_column(df_ams_group, 'Economia', True)}
+            # '''
+            # df_config.footer_df(df_ams_group, texto)
 
             df_ams_group['Número de série'] = ''
-            download_xlsx.download(df_ams_group, 'downlod_df_ams_group')
+            # download_xlsx.download(df_ams_group, 'downlod_df_ams_group')
             df_ams_group.drop(columns=['Número de série'], inplace=True)
-            st.divider()
+            # st.divider()
             # endregion
             # ========================================================
 
@@ -385,35 +384,35 @@ def show():
             # ========================================================
             # region FILTER DF_MERGE
             # ========================================================
-            if 'series' not in st.session_state:
-                st.session_state.series_merge = []
-            col1, col2, _ = st.columns(
-                [2, 1, 4],
-                vertical_alignment="bottom",
-            )
+            # if 'series' not in st.session_state:
+            #     st.session_state.series_merge = []
+            # col1, col2, _ = st.columns(
+            #     [2, 1, 4],
+            #     vertical_alignment="bottom",
+            # )
 
-            with col1:
-                serie_merge = st.text_input(
-                    'Número de Série',
-                    key='filtro_numero_serie',
-                )
-            with col2:
-                if st.button(
-                    'Limpar Filtro',
-                    type='primary',
-                    key='limpar_filtro'
-                ):
-                    st.session_state.series_merge = []
+            # with col1:
+            #     serie_merge = st.text_input(
+            #         'Número de Série',
+            #         key='filtro_numero_serie',
+            #     )
+            # with col2:
+            #     if st.button(
+            #         'Limpar Filtro',
+            #         type='primary',
+            #         key='limpar_filtro'
+            #     ):
+            #         st.session_state.series_merge = []
 
-            if serie_merge:
-                st.session_state.series_merge.append(serie_merge)
-                series_merge = st.session_state.series_merge
-                df_merge = df_merge[
-                    (df_merge['Número de série'].isin(series_merge))
-                    |
-                    (df_merge['Número de Série'].isin(series_merge))
+            # if serie_merge:
+            #     st.session_state.series_merge.append(serie_merge)
+            #     series_merge = st.session_state.series_merge
+            #     df_merge = df_merge[
+            #         (df_merge['Número de série'].isin(series_merge))
+            #         |
+            #         (df_merge['Número de Série'].isin(series_merge))
                     
-                ]
+            #     ]
             # endregion
             # ========================================================
 
@@ -465,49 +464,49 @@ def show():
 
             st.session_state.df_pq = df_merge
 
-            st.dataframe(
-                df_merge,
-                width='stretch'
-            )
-            custo_reparo = formatters.br_num(sum_column(df_merge, 'Custo de Reparos'), 2, True)
-            pago_clie = formatters.br_num(sum_column(df_merge, 'Pago pelo Cliente'), 2, True)
-            economia = formatters.br_num(sum_column(df_merge, 'Economia'), 2, True)
-            df_config.footer_df(df_merge, f'''
-                registros após o merge, custo reparos {custo_reparo} valor pago pelo cliente {pago_clie} economia {economia}
-            ''')
-            download_xlsx.download(df_merge, 'dowload_merge')
-            st.divider()
+            # st.dataframe(
+            #     df_merge,
+            #     width='stretch'
+            # )
+            # custo_reparo = formatters.br_num(sum_column(df_merge, 'Custo de Reparos'), 2, True)
+            # pago_clie = formatters.br_num(sum_column(df_merge, 'Pago pelo Cliente'), 2, True)
+            # economia = formatters.br_num(sum_column(df_merge, 'Economia'), 2, True)
+            # df_config.footer_df(df_merge, f'''
+            #     registros após o merge, custo reparos {custo_reparo} valor pago pelo cliente {pago_clie} economia {economia}
+            # ''')
+            # download_xlsx.download(df_merge, 'dowload_merge')
+            # st.divider()
             # endregion
             # ========================================================
 
 
-            anos_disponiveis = sorted(
-                df_ams['ano_reparo']
-                .dropna()
-                .astype(int)
-                .unique()
-            )        
-            anos_selecionados = st.multiselect(
-                "Ano da reparação",
-                options=anos_disponiveis,
-                default=anos_disponiveis,
-                key="filtro_ano_reparacao_geral",
-            )
+            # anos_disponiveis = sorted(
+            #     df_ams['ano_reparo']
+            #     .dropna()
+            #     .astype(int)
+            #     .unique()
+            # )        
+            # anos_selecionados = st.multiselect(
+            #     "Ano da reparação",
+            #     options=anos_disponiveis,
+            #     default=anos_disponiveis,
+            #     key="filtro_ano_reparacao_geral",
+            # )
 
-            df_por_ano = data_processing.preparacoes_por_ano(df_merge, df_ams, anos_selecionados)
+            # df_por_ano = data_processing.preparacoes_por_ano(df_merge, df_ams, anos_selecionados)
 
-            st.dataframe(df_por_ano)
-            texto = f'''
-                registros localizados em df_por_ano,
-                {int(df_por_ano['# Notif.'].sum())} ordems e 
-                {int(df_por_ano['Reparos_no_período'].sum())} reparos,
-                Custo reparo: R$ {df_config.sum_column(df_por_ano, 'Custo_no_período', True)} 
-                Pago pelo Cliente: R$ {df_config.sum_column(df_por_ano, 'Pago_no_período', True)}
-                Economia: R$ {df_config.sum_column(df_por_ano, 'Economia_no_período', True)}
-            '''
-            df_config.footer_df(df_por_ano, texto)
+            # st.dataframe(df_por_ano)
+            # texto = f'''
+            #     registros localizados em df_por_ano,
+            #     {int(df_por_ano['# Notif.'].sum())} ordems e 
+            #     {int(df_por_ano['Reparos_no_período'].sum())} reparos,
+            #     Custo reparo: R$ {df_config.sum_column(df_por_ano, 'Custo_no_período', True)} 
+            #     Pago pelo Cliente: R$ {df_config.sum_column(df_por_ano, 'Pago_no_período', True)}
+            #     Economia: R$ {df_config.sum_column(df_por_ano, 'Economia_no_período', True)}
+            # '''
+            # df_config.footer_df(df_por_ano, texto)
 
-            st.write(df_por_ano["Situação_AMS"].value_counts())            
+            # st.write(df_por_ano["Situação_AMS"].value_counts())            
 
 
         # endregion
