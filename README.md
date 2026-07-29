@@ -77,3 +77,60 @@ A suíte inclui testes para:
 - conciliação entre fontes;
 - projeção opcional de ano parcial;
 - cenário de concentração para renovação.
+
+## Relatório PDF reutilizável
+
+O Dashboard possui agora a aba **Relatório PDF**. A geração usa a mesma base
+analítica já filtrada na tela e preserva:
+
+- anos selecionados;
+- filtros do parque;
+- data de corte;
+- fator de impostos;
+- idade de corte;
+- quantidade de máquinas do cenário;
+- logo e nome do cliente;
+- opção de incluir ou não a base completa no Anexo D.
+
+O relatório é produzido inteiramente em memória com ReportLab e disponibilizado
+por `st.download_button`. Não é necessário salvar arquivos temporários no servidor.
+
+Código principal:
+
+- `src/dashtoolsrecomendation/reports/config.py`: configuração variável do cliente;
+- `src/dashtoolsrecomendation/reports/generator.py`: páginas, gráficos, tabelas e anexos;
+- `tests/test_pdf_report.py`: testes de geração e validação do arquivo PDF.
+
+Exemplo de uso fora do Streamlit:
+
+```python
+from datetime import date
+
+from dashtoolsrecomendation.reports import PdfReportConfig, gerar_relatorio_pdf
+
+config = PdfReportConfig(
+    cliente="Cliente Exemplo",
+    responsavel="Responsável",
+    cargo_responsavel="Rental Hilti do Brasil",
+    data_emissao=date.today(),
+    data_inicio=date(2024, 1, 1),
+    data_fim=date.today(),
+    idade_corte=5,
+    fator_impostos=1.4,
+    quantidade_cenario=100,
+)
+
+pdf_bytes = gerar_relatorio_pdf(
+    base=base_analitica_filtrada,
+    df_ams=df_ams,
+    anos=[2024, 2025, 2026],
+    config=config,
+)
+```
+
+O projeto limita explicitamente a versão do Python a `>=3.12,<4.0`, pois o `reportlab` ainda não declara compatibilidade com Python 4. O arquivo `poetry.lock` antigo foi removido para permitir a resolução das dependências. Na primeira instalação, execute:
+
+```powershell
+poetry lock
+poetry install
+```

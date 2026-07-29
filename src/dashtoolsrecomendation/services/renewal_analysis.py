@@ -143,7 +143,16 @@ def _percentile_score(series: pd.Series) -> pd.Series:
     return numeric.rank(method="average", pct=True).fillna(0)
 
 
+def _is_frota_ativa(row: pd.Series) -> bool:
+    grupo = str(row.get("Grupo", "")).strip().casefold()
+    status = str(row.get("Status da Ferramenta", "")).strip().casefold()
+    return grupo == "frota" and status == "ativo"
+
+
 def _classificar_prioridade(row: pd.Series) -> str:
+    if _is_frota_ativa(row):
+        return "Manter"
+
     reparos = float(row["Reparações no período"])
     score = float(row["Índice de prioridade"])
     idade = float(row["Idade atual"])
@@ -160,6 +169,9 @@ def _classificar_prioridade(row: pd.Series) -> str:
 
 
 def _motivo_principal(row: pd.Series) -> str:
+    if _is_frota_ativa(row):
+        return "Gestão de Frotas"
+
     alta_freq = row["Percentil frequência"] >= 0.75
     alto_custo = row["Percentil custo"] >= 0.75
     idade_alta = row["Idade atual"] >= 8
@@ -518,22 +530,29 @@ def composicao_custo(base: pd.DataFrame) -> pd.DataFrame:
 
 
 def cenario_renovacao(base: pd.DataFrame, quantidade: int) -> tuple[pd.DataFrame, dict[str, float]]:
-    quantidade = max(0, min(int(quantidade), len(base)))
-    selected = base.head(quantidade).copy()
+    quantidade_solicitada = max(0, int(quantidade))
+    elegiveis = (
+        base.loc[base["Recomendação"].ne("Manter")]
+        .sort_values("Índice de prioridade", ascending=False, kind="stable")
+    )
+    selected = elegiveis.head(quantidade_solicitada).copy()
+    quantidade_selecionada = len(selected)
     total_reparacoes = float(base["Reparações no período"].sum())
     total_custo = float(base["Custo com impostos"].sum())
     reparacoes = float(selected["Reparações no período"].sum())
     custo = float(selected["Custo com impostos"].sum())
 
     summary = {
-        "maquinas": quantidade,
+        "maquinas": quantidade_selecionada,
         "reparacoes": reparacoes,
         "percentual_reparacoes": (
             reparacoes / total_reparacoes if total_reparacoes else 0
         ),
         "custo": custo,
         "percentual_custo": custo / total_custo if total_custo else 0,
-        "idade_media": float(selected["Idade atual"].mean()) if quantidade else 0,
+        "idade_media": (
+            float(selected["Idade atual"].mean()) if quantidade_selecionada else 0
+        ),
     }
     return selected, summary
 

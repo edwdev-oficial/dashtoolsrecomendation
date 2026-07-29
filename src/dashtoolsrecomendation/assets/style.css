@@ -27,6 +27,37 @@
     background-color: var(--COLOR_DARK);
 }
 
+/*
+ * A barra lateral recolhida coloca o botão de reabertura sobre o cabeçalho
+ * escuro. Este seletor é exclusivo desse estado; o botão de recolher exibido
+ * dentro da barra aberta (stSidebarCollapseButton) mantém o estilo original.
+ */
+[data-testid="stExpandSidebarButton"] {
+    color: var(--COLOR_WHITE) !important;
+    background-color: var(--COLOR_RED) !important;
+    border: 1px solid rgba(255, 255, 255, 0.82) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28) !important;
+}
+
+[data-testid="stExpandSidebarButton"]:hover {
+    color: var(--COLOR_WHITE) !important;
+    background-color: #b8041a !important;
+    border-color: var(--COLOR_WHITE) !important;
+}
+
+[data-testid="stExpandSidebarButton"]:focus-visible {
+    outline: 2px solid var(--COLOR_WHITE) !important;
+    outline-offset: 2px;
+}
+
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"],
+[data-testid="stExpandSidebarButton"] svg {
+    color: var(--COLOR_WHITE) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
 .block-container {
     padding-top: 4rem;
     padding-bottom: 1.5rem;

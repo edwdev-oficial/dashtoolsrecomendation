@@ -47,6 +47,27 @@ class RenewalAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(summary["reparacoes_por_maquina_parque"], 4 / 3)
         self.assertAlmostEqual(summary["custo"], 350 * 1.4)
 
+    def test_frota_ativa_tem_recomendacao_manter_independentemente_do_indice(self):
+        parque = self.parque.copy()
+        parque.loc[parque["Número de Série"].eq("1"), "Grupo"] = " Frota "
+        parque.loc[
+            parque["Número de Série"].eq("1"),
+            "Status da Ferramenta",
+        ] = "ATIVO"
+
+        base = renewal_analysis.preparar_base_maquinas(
+            parque,
+            self.ams,
+            [2024, 2025, 2026],
+            data_corte=pd.Timestamp("2026-07-21"),
+        ).set_index("Número de Série")
+
+        maquina = base.loc["1"]
+        self.assertGreaterEqual(maquina["Índice de prioridade"], 70)
+        self.assertGreaterEqual(maquina["Reparações no período"], 2)
+        self.assertEqual(maquina["Recomendação"], "Manter")
+        self.assertEqual(maquina["Motivo principal"], "Gestão de Frotas")
+
     def test_modelos_usam_maquinas_do_parque(self):
         base = renewal_analysis.preparar_base_maquinas(
             self.parque,
@@ -106,6 +127,32 @@ class RenewalAnalysisTests(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         self.assertGreater(summary["percentual_custo"], 0)
         self.assertLessEqual(summary["percentual_custo"], 1)
+
+    def test_cenario_ignora_manter_e_limita_ao_total_elegivel(self):
+        base = pd.DataFrame(
+            {
+                "Número de Série": ["frota", "prioritaria", "planejada", "manter"],
+                "Índice de prioridade": [95.0, 90.0, 60.0, 20.0],
+                "Recomendação": [
+                    "Manter",
+                    "Troca prioritária",
+                    "Planejar renovação",
+                    "Manter",
+                ],
+                "Reparações no período": [10, 8, 4, 1],
+                "Custo com impostos": [1000.0, 800.0, 400.0, 100.0],
+                "Idade atual": [2.0, 9.0, 7.0, 3.0],
+            }
+        )
+
+        selected, summary = renewal_analysis.cenario_renovacao(base, 10)
+
+        self.assertEqual(
+            selected["Número de Série"].tolist(),
+            ["prioritaria", "planejada"],
+        )
+        self.assertFalse(selected["Recomendação"].eq("Manter").any())
+        self.assertEqual(summary["maquinas"], 2)
 
 
 if __name__ == "__main__":
