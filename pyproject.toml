@@ -6,7 +6,7 @@ authors = [
     {name = "edwdev-oficial",email = "edjdevel@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "pandas (>=3.0.3,<4.0.0)",
     "streamlit (>=1.59.2,<2.0.0)",
@@ -15,7 +15,8 @@ dependencies = [
     "openpyxl (>=3.1.5,<4.0.0)",
     "pymongo (>=4.17.0,<5.0.0)",
     "xlsxwriter (>=3.2.9,<4.0.0)",
-    "pytest (>=9.1.1,<10.0.0)"
+    "pytest (>=9.1.1,<10.0.0)",
+    "reportlab (>=5.0.0,<6.0.0)"
 ]
 
 [tool.poetry]
