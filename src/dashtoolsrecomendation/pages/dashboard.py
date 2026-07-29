@@ -6,6 +6,8 @@ import pandas as pd
 import streamlit as st
 
 from dashtoolsrecomendation.components import cards, dashboard_charts, dashboard_filters
+from dashtoolsrecomendation.reports import PdfReportConfig, gerar_relatorio_pdf
+from dashtoolsrecomendation.reports.generator import PDF_LAYOUT_VERSION
 from dashtoolsrecomendation.services import (
     dashboard_data,
     data_processing,
@@ -266,13 +268,14 @@ def show() -> None:
         unsafe_allow_html=True,
     )
 
-    tab_resumo, tab_modelos, tab_renovacao, tab_qualidade, tab_dados = st.tabs(
+    tab_resumo, tab_modelos, tab_renovacao, tab_qualidade, tab_dados, tab_pdf = st.tabs(
         [
             "Resumo executivo",
             "Modelos e custos",
             "Plano de renovação",
             "Qualidade dos dados",
             "Base filtrada",
+            "Relatório PDF",
         ]
     )
 
@@ -316,6 +319,9 @@ def show() -> None:
                 ),
             ]
         )
+        # Mantém um respiro compacto entre os KPIs e a primeira linha
+        # de gráficos.
+        st.space(4)
 
         # Mantenha cada pilha de gráficos na mesma coluna. Se as linhas forem
         # criadas separadamente, a matriz (mais alta) define a altura de toda a
@@ -502,16 +508,32 @@ def show() -> None:
 
     with tab_renovacao:
         max_machines = len(base)
-        default_quantity = min(20, max_machines)
+        scenario_quantity_key = "quantidade_cenario_renovacao"
+        default_quantity = max(
+            1,
+            min(
+                int(base["Idade atual"].gt(idade_corte).sum()),
+                max_machines,
+            ),
+        )
+        if scenario_quantity_key not in st.session_state:
+            st.session_state[scenario_quantity_key] = default_quantity
+        else:
+            st.session_state[scenario_quantity_key] = min(
+                max(1, int(st.session_state[scenario_quantity_key])),
+                max_machines,
+            )
         quantidade = st.slider(
             "Quantidade de máquinas no cenário inicial",
             min_value=1,
             max_value=max_machines,
-            value=default_quantity,
             help=(
-                "Seleciona as máquinas com maior índice analítico. Os percentuais "
+                "O valor inicial corresponde às máquinas acima da idade de corte. "
+                "Depois, pode ser ajustado para selecionar as máquinas com maior "
+                "índice analítico. Os percentuais "
                 "mostram concentração histórica no período, não redução garantida."
             ),
+            key=scenario_quantity_key,
         )
         selected, scenario = renewal_analysis.cenario_renovacao(base, quantidade)
         pareto = renewal_analysis.dados_pareto(base)
@@ -540,6 +562,8 @@ def show() -> None:
                 ),
             ]
         )
+        # Usa o mesmo respiro compacto adotado no Resumo executivo.
+        st.space(4)
 
         st.plotly_chart(
             dashboard_charts.grafico_pareto_custo_maquina(
@@ -682,3 +706,170 @@ def show() -> None:
             key="download_base_analitica",
             type="primary",
         )
+
+    with tab_pdf:
+        if st.session_state.get("_pdf_layout_version") != PDF_LAYOUT_VERSION:
+            st.session_state.pop("pdf_relatorio_bytes", None)
+            st.session_state.pop("pdf_relatorio_nome", None)
+            st.session_state["_pdf_layout_version"] = PDF_LAYOUT_VERSION
+
+        st.markdown("### Gerar relatório técnico e econômico")
+        st.caption(
+            "O PDF usa exatamente a base filtrada, os anos selecionados, a data de "
+            "corte, o fator de impostos e a quantidade definida no cenário de renovação."
+        )
+
+        clientes = []
+        if "Razão Social" in base.columns:
+            clientes = (
+                base["Razão Social"]
+                .dropna()
+                .astype(str)
+                .str.strip()
+                .loc[lambda values: values.ne("")]
+                .unique()
+                .tolist()
+            )
+        cliente_padrao = clientes[0] if len(clientes) == 1 else ""
+        responsavel_padrao = str(st.session_state.get("authenticated_user", ""))
+        quantidade_relatorio = int(
+            st.session_state.get(
+                "quantidade_cenario_renovacao",
+                min(20, len(base)),
+            )
+        )
+        idade_maxima_relatorio = max(1, int(base["Idade atual"].max()))
+        idade_corte_relatorio = min(
+            max(
+                0,
+                int(
+                    st.session_state.get(
+                        "idade_corte_resumo",
+                        min(5, idade_maxima_relatorio),
+                    )
+                ),
+            ),
+            idade_maxima_relatorio,
+        )
+
+        with st.form("form_relatorio_pdf"):
+            col_cliente, col_responsavel = st.columns(2)
+            with col_cliente:
+                cliente_relatorio = st.text_input(
+                    "Cliente",
+                    value=cliente_padrao,
+                    placeholder="Nome do cliente",
+                )
+                cargo_relatorio = st.text_input(
+                    "Área/cargo do responsável",
+                    value="Rental Hilti do Brasil",
+                )
+            with col_responsavel:
+                responsavel_relatorio = st.text_input(
+                    "Responsável",
+                    value=responsavel_padrao,
+                )
+                logo_cliente = st.file_uploader(
+                    "Logo do cliente (opcional)",
+                    type=["png", "jpg", "jpeg"],
+                    accept_multiple_files=False,
+                )
+
+            col_cenario, col_idade, col_base = st.columns(3)
+            with col_cenario:
+                quantidade_pdf = st.number_input(
+                    "Máquinas no cenário",
+                    min_value=1,
+                    max_value=len(base),
+                    value=min(quantidade_relatorio, len(base)),
+                    step=1,
+                )
+            with col_idade:
+                idade_corte_pdf = st.number_input(
+                    "Idade de corte",
+                    min_value=0,
+                    max_value=idade_maxima_relatorio,
+                    value=idade_corte_relatorio,
+                    step=1,
+                )
+            with col_base:
+                incluir_base_completa = st.checkbox(
+                    "Incluir base completa",
+                    value=True,
+                    help="Inclui todas as máquinas filtradas no Anexo D.",
+                )
+
+            gerar_pdf = st.form_submit_button(
+                "Gerar relatório PDF",
+                type="primary",
+                icon=":material/picture_as_pdf:",
+                width="stretch",
+            )
+
+        if gerar_pdf:
+            filtros_relatorio = {
+                "Anos das reparações": anos_selecionados,
+                "Cliente": st.session_state.get("filtro_cliente"),
+                "UF": st.session_state.get("filtro_uf"),
+                "Grupo": st.session_state.get("filtro_grupo"),
+                "Status": st.session_state.get("filtro_status"),
+                "Tipo": st.session_state.get("filtro_tipo"),
+                "Linha": st.session_state.get("filtro_linha"),
+                "Modelo": st.session_state.get("filtro_modelo"),
+                "Reparadas": st.session_state.get("filtro_reparadas"),
+                "Garantia": st.session_state.get("filtro_garantia"),
+                "Idades": st.session_state.get("filter_idade"),
+            }
+            config_pdf = PdfReportConfig(
+                cliente=cliente_relatorio.strip(),
+                responsavel=responsavel_relatorio.strip() or "Não informado",
+                cargo_responsavel=cargo_relatorio.strip() or "Não informado",
+                data_emissao=date.today(),
+                data_inicio=date(min(anos_selecionados), 1, 1),
+                data_fim=pd.Timestamp(data_corte).date(),
+                idade_corte=int(idade_corte_pdf),
+                fator_impostos=float(fator_impostos),
+                quantidade_cenario=int(quantidade_pdf),
+                incluir_base_completa=bool(incluir_base_completa),
+                logo_cliente=logo_cliente.getvalue() if logo_cliente else None,
+                filtros=filtros_relatorio,
+            )
+            try:
+                with st.spinner("Gerando relatório e paginando os anexos..."):
+                    pdf_bytes = gerar_relatorio_pdf(
+                        base=base,
+                        df_ams=df_ams,
+                        anos=anos_selecionados,
+                        config=config_pdf,
+                        projetar_ano_parcial=projetar_ano_parcial,
+                        dashboard_source=df_com_periodo,
+                    )
+                timestamp = pd.Timestamp.now().strftime("%Y_%m_%d_%H_%M_%S")
+                safe_client = "_".join(
+                    cliente_relatorio.strip().replace("/", " ").split()
+                ) or "cliente"
+                st.session_state["pdf_relatorio_bytes"] = pdf_bytes
+                st.session_state["pdf_relatorio_nome"] = (
+                    f"analise_renovacao_{safe_client}_{timestamp}.pdf"
+                )
+                st.success(
+                    f"Relatório gerado com {len(base):,} máquinas na base filtrada."
+                    .replace(",", ".")
+                )
+            except Exception as error:
+                st.exception(error)
+
+        if st.session_state.get("pdf_relatorio_bytes"):
+            st.download_button(
+                "Baixar relatório PDF",
+                data=st.session_state["pdf_relatorio_bytes"],
+                file_name=st.session_state.get(
+                    "pdf_relatorio_nome",
+                    "analise_renovacao.pdf",
+                ),
+                mime="application/pdf",
+                type="primary",
+                icon=":material/download:",
+                width="stretch",
+                key="download_relatorio_pdf",
+            )
