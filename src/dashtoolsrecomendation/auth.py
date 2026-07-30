@@ -6,6 +6,7 @@ import streamlit as st
 
 AUTHENTICATED_KEY = "authenticated"
 AUTHENTICATED_USER_KEY = "authenticated_user"
+AUTHENTICATED_NAME_KEY = "authenticated_name"
 AUTHENTICATED_ROLE_KEY = "authenticated_role"
 LOGO_PATH = Path(__file__).parent / "assets" / "logoHilti.png"
 
@@ -15,7 +16,9 @@ def is_authenticated() -> bool:
     return bool(st.session_state.get(AUTHENTICATED_KEY, False))
 
 
-def _get_authenticated_role(user: str, password: str) -> str | None:
+def _get_authenticated_identity(
+    user: str, password: str
+) -> tuple[str, str] | None:
     try:
         configured_users = st.secrets["auth"]["users"]
     except (KeyError, TypeError):
@@ -31,9 +34,44 @@ def _get_authenticated_role(user: str, password: str) -> str | None:
             password, str(credentials["password"])
         )
         if user_matches and password_matches:
-            return str(credentials["role"])
+            configured_name = str(credentials.get("name", user)).strip()
+            return str(credentials["role"]), configured_name or user
 
     return None
+
+
+def get_authenticated_name() -> str:
+    """Return the configured name for the current authenticated user."""
+    authenticated_name = str(
+        st.session_state.get(AUTHENTICATED_NAME_KEY, "")
+    ).strip()
+    if authenticated_name:
+        return authenticated_name
+
+    authenticated_user = str(
+        st.session_state.get(AUTHENTICATED_USER_KEY, "")
+    ).strip()
+    if not authenticated_user:
+        return ""
+
+    # Preenche sessões que já estavam autenticadas antes da inclusão de `name`.
+    try:
+        configured_users = st.secrets["auth"]["users"]
+    except (KeyError, TypeError):
+        return authenticated_user
+
+    for credentials in configured_users:
+        if hmac.compare_digest(
+            authenticated_user, str(credentials["user"])
+        ):
+            configured_name = str(
+                credentials.get("name", authenticated_user)
+            ).strip()
+            authenticated_name = configured_name or authenticated_user
+            st.session_state[AUTHENTICATED_NAME_KEY] = authenticated_name
+            return authenticated_name
+
+    return authenticated_user
 
 
 def has_role(role: str) -> bool:
@@ -87,10 +125,18 @@ def render_login() -> None:
                 )
 
             if submitted:
-                authenticated_role = _get_authenticated_role(user.strip(), password)
-                if authenticated_role is not None:
+                authenticated_identity = _get_authenticated_identity(
+                    user.strip(), password
+                )
+                if authenticated_identity is not None:
+                    authenticated_role, authenticated_name = (
+                        authenticated_identity
+                    )
                     st.session_state[AUTHENTICATED_KEY] = True
                     st.session_state[AUTHENTICATED_USER_KEY] = user.strip()
+                    st.session_state[AUTHENTICATED_NAME_KEY] = (
+                        authenticated_name
+                    )
                     st.session_state[AUTHENTICATED_ROLE_KEY] = authenticated_role
                     st.rerun()
 

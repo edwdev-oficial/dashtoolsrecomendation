@@ -14,3 +14,7 @@ def show():
     with st.container(border=True):
         st.subheader(":material/folder: Área de testes")
         st.write("Conteúdo disponível somente para usuários administradores.")
+
+    st.divider()
+
+    st.write(st.session_state)

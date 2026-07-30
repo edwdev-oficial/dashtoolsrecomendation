@@ -75,7 +75,7 @@ def main():
     with st.sidebar:
         st.caption(
             f":material/account_circle: "
-            f"{st.session_state[auth.AUTHENTICATED_USER_KEY]} · "
+            f"{auth.get_authenticated_name()} · "
             f"{st.session_state[auth.AUTHENTICATED_ROLE_KEY]}"
         )
         st.button(

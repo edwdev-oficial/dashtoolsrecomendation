@@ -10,3 +10,6 @@ tutorial.md
 analise_indice_prioridade_executed.pdf
 generate_percentis_indices_csv.py
 parque_filtrado_percentis_indices.csv
+parque_filtrado_percentis_indices.xlsx
+inspect_parque_csv.py
+~$parque_filtrado_percentis_indices.xlsx

@@ -764,10 +764,9 @@ class _ReportRenderer:
             "Máquinas",
             "Reparações",
             "% reparações",
-            "Custo",
             "% custo",
         ]
-        col_widths = [145, 58, 70, 78, 94, 50]
+        col_widths = [145, 58, 70, 112, 50]
         header_h = 24
         row_h = 23
         total_h = header_h + row_h * len(order)
@@ -806,7 +805,6 @@ class _ReportRenderer:
                 _number(row["Máquinas"]),
                 _number(row["Reparações"]),
                 _percent(float(row["Reparações"]) / total_repairs),
-                _money(row["Custo"]),
                 _percent(float(row["Custo"]) / total_cost),
             ]
 

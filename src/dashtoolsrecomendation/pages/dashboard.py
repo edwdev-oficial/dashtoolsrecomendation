@@ -5,6 +5,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from dashtoolsrecomendation import auth
 from dashtoolsrecomendation.components import cards, dashboard_charts, dashboard_filters
 from dashtoolsrecomendation.reports import PdfReportConfig, gerar_relatorio_pdf
 from dashtoolsrecomendation.reports.generator import PDF_LAYOUT_VERSION
@@ -731,7 +732,7 @@ def show() -> None:
                 .tolist()
             )
         cliente_padrao = clientes[0] if len(clientes) == 1 else ""
-        responsavel_padrao = str(st.session_state.get("authenticated_user", ""))
+        responsavel_padrao = auth.get_authenticated_name()
         quantidade_relatorio = int(
             st.session_state.get(
                 "quantidade_cenario_renovacao",
