@@ -297,6 +297,39 @@ div.st-key-container-graph-modelos-lateral div[data-testid="stElementContainer"]
 }
 
 /* Rótulo e ajuda do seletor de idade no mesmo branco dos títulos dos gráficos */
+/*
+ * Os inputs mantêm fundo claro e texto escuro, mas seus rótulos ficam sobre o
+ * fundo escuro do dashboard. A cor do tema claro não oferece contraste nesse
+ * contexto, portanto todos os rótulos da área principal usam branco.
+ */
+[data-testid="stMainBlockContainer"] [data-testid="stWidgetLabel"],
+[data-testid="stMainBlockContainer"] [data-testid="stWidgetLabel"] *,
+[data-testid="stMainBlockContainer"] [data-testid="stTooltipIcon"] {
+    color: var(--COLOR_WHITE) !important;
+    -webkit-text-fill-color: var(--COLOR_WHITE) !important;
+    opacity: 1 !important;
+}
+
+[data-testid="stMainBlockContainer"] [data-testid="stTooltipIcon"] svg {
+    color: var(--COLOR_WHITE) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
+/* O formulário de login é a única área principal com card branco. */
+.st-key-login_card [data-testid="stWidgetLabel"],
+.st-key-login_card [data-testid="stWidgetLabel"] *,
+.st-key-login_card [data-testid="stTooltipIcon"] {
+    color: var(--COLOR_DARK) !important;
+    -webkit-text-fill-color: var(--COLOR_DARK) !important;
+}
+
+.st-key-login_card [data-testid="stTooltipIcon"] svg {
+    color: var(--COLOR_DARK) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
 .st-key-idade_corte_reparacoes [data-testid="stWidgetLabel"],
 .st-key-idade_corte_reparacoes [data-testid="stWidgetLabel"] p,
 .st-key-idade_corte_reparacoes [data-testid="stTooltipIcon"] {

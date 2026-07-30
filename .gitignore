@@ -6,3 +6,7 @@ __pycache__/
 .env
 *.log
 tutorial.md
+*.ipynb
+analise_indice_prioridade_executed.pdf
+generate_percentis_indices_csv.py
+parque_filtrado_percentis_indices.csv

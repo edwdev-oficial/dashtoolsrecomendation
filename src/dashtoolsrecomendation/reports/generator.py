@@ -1297,7 +1297,7 @@ class _ReportRenderer:
         y = self._header(
             "07",
             "Composição e recomendações",
-            "Modelos e custos",
+            "Compoisição de custos e recomendações",
             "O custo observado e as recomendações mostram dimensões complementares da exposição",
             title_size=22,
         )
