@@ -154,6 +154,23 @@ class RenewalAnalysisTests(unittest.TestCase):
         self.assertFalse(selected["Recomendação"].eq("Manter").any())
         self.assertEqual(summary["maquinas"], 2)
 
+    def test_quantidade_padrao_do_cenario_usa_trocas_prioritarias(self):
+        base = pd.DataFrame(
+            {
+                "Idade atual": [12, 11, 10, 2],
+                "Recomendação": [
+                    "Troca prioritária",
+                    "Planejar renovação",
+                    "Troca prioritária",
+                    "Manter",
+                ],
+            }
+        )
+
+        quantidade = renewal_analysis.quantidade_padrao_cenario(base)
+
+        self.assertEqual(quantidade, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

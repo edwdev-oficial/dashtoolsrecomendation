@@ -4,6 +4,7 @@
 import pandas as pd
 import streamlit as st
 from io import BytesIO
+import warnings
 
 from dashtoolsrecomendation.assets.colunas import colunas
 from dashtoolsrecomendation.services import (
@@ -29,7 +30,19 @@ from dashtoolsrecomendation.utils import (
 @st.cache_data(show_spinner="Carregando arquivos...")
 
 def carregar_excel(file_bytes, sheet_name=0):
-    return pd.read_excel(BytesIO(file_bytes), sheet_name=sheet_name)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                r"^Workbook contains no default style, "
+                r"apply openpyxl's default$"
+            ),
+            category=UserWarning,
+        )
+        return pd.read_excel(
+            BytesIO(file_bytes),
+            sheet_name=sheet_name,
+        )
 
 
 def convert_col_df_to_date(df, colunas=None):
@@ -544,5 +557,4 @@ def show():
 
 # endregion
 # ========================================================
-
 

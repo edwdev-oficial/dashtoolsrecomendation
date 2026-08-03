@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any, cast
 
 import pandas as pd
 import streamlit as st
@@ -24,23 +25,31 @@ from dashtoolsrecomendation.utils import (
 
 
 def prepare_df() -> pd.DataFrame:
-
     return dashboard_data.preparar_dashboard(
-        st.session_state.df_pq,
-        get_data_ids.get(),
+        cast(pd.DataFrame, st.session_state.df_pq),
+        cast(pd.DataFrame, get_data_ids.get()),
     )
 
 
-def _numero(valor: float, casas: int = 0) -> str:
-    return formatters.br_num(float(valor), casas)
+def _as_float(value: object) -> float:
+    """Converte valores escalares retornados pelo pandas/Streamlit."""
+    return float(cast(Any, value))
 
 
-def _moeda(valor: float, casas: int = 0) -> str:
-    return formatters.br_num(float(valor), casas, use_brl=True)
+def _as_int(value: object) -> int:
+    return int(_as_float(value))
 
 
-def _percentual(valor: float, casas: int = 1) -> str:
-    return f"{_numero(valor * 100, casas)}%"
+def _numero(valor: object, casas: int = 0) -> str:
+    return formatters.br_num(_as_float(valor), casas)
+
+
+def _moeda(valor: object, casas: int = 0) -> str:
+    return formatters.br_num(_as_float(valor), casas, use_brl=True)
+
+
+def _percentual(valor: object, casas: int = 1) -> str:
+    return f"{_numero(_as_float(valor) * 100, casas)}%"
 
 
 def _render_cards_resumo(resumo: dict[str, float]) -> None:
@@ -102,13 +111,18 @@ def _analytical_table(base: pd.DataFrame, limit: int | None = None) -> pd.DataFr
         "Recomendação",
         "Motivo principal",
     ]
-    result = base[[column for column in columns if column in base.columns]].copy()
+    selected_columns = [
+        column for column in columns if column in base.columns
+    ]
+    result = cast(pd.DataFrame, base[selected_columns]).copy()
     if limit is not None:
         result = result.head(limit)
     return result
 
 
-def _render_ranking(base: pd.DataFrame, limit: int = 12) -> None:
+def _render_ranking(
+    base: pd.DataFrame, limit: int | None = 12
+) -> None:
     st.markdown("#### Máquinas com maior prioridade analítica")
     st.dataframe(
         _analytical_table(base, limit),
@@ -143,14 +157,22 @@ def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
 
     if df_ams.empty or "ano_reparo" not in df_ams.columns:
         return []
+    anos_numericos = cast(
+        pd.Series,
+        pd.to_numeric(df_ams["ano_reparo"], errors="coerce"),
+    )
     anos = (
-        pd.to_numeric(df_ams["ano_reparo"], errors="coerce")
+        anos_numericos
         .dropna()
         .astype(int)
         .unique()
         .tolist()
     )
-    return sorted(ano for ano in anos if ano >= renewal_analysis.ANALYSIS_START_YEAR)
+    return sorted(
+        int(ano)
+        for ano in anos
+        if int(ano) >= renewal_analysis.ANALYSIS_START_YEAR
+    )
 
 
 def show() -> None:
@@ -228,7 +250,7 @@ def show() -> None:
     df_com_periodo["reparada"] = (
         df_com_periodo["Reparos_no_período"]
         .gt(0)
-        .map({True: "Sim", False: "Não"})
+        .map(lambda repaired: "Sim" if bool(repaired) else "Não")
     )
 
     df_filtrado, _ = dashboard_filters.aplicar_filtros(df_com_periodo)
@@ -247,6 +269,8 @@ def show() -> None:
         st.info("Não há números de série válidos no parque filtrado.")
         return
 
+    st.session_state['base'] = base
+
     resumo = renewal_analysis.resumo_executivo(base)
     _render_cards_resumo(resumo)
 
@@ -259,7 +283,7 @@ def show() -> None:
         <div class="method-note">
             <strong>Escopo metodológico:</strong> reparações registradas pela Hilti de
             {ano_inicial} a {ano_final}{complemento_periodo}. O histórico anterior a
-            {renewal_analysis.ANALYSIS_START_YEAR} não é tratado como histórico completo,
+            {ano_inicial} não é tratado como histórico completo,
             pois, ou não existem manutenções anteriores ou eram realizadas na oficina do cliente. Os valores
             de custo usam fator <strong>{fator_impostos:.2f}</strong> sobre o Net Price para o cálculo aproximado de impostos.
             Esta base mede frequência e custo; disponibilidade, tempo parado e
@@ -282,7 +306,7 @@ def show() -> None:
 
     with tab_resumo:
 
-        idade_maxima = max(1, int(base["Idade atual"].max()))
+        idade_maxima = max(1, _as_int(base["Idade atual"].max()))
         idade_corte = st.number_input(
             "Idade de corte para comparação",
             min_value=0,
@@ -296,7 +320,7 @@ def show() -> None:
             key="idade_corte_resumo",
         )
         faixas = renewal_analysis.analise_faixas_idade(base, idade_corte)
-        antigas = int(base["Idade atual"].gt(idade_corte).sum())
+        antigas = _as_int(base["Idade atual"].gt(idade_corte).sum())
         pct_antigas = antigas / len(base) if len(base) else 0
         top_20 = min(20, len(base))
         _, cenario_top = renewal_analysis.cenario_renovacao(base, top_20)
@@ -329,11 +353,16 @@ def show() -> None:
         # primeira linha e deixa um espaço vazio sob o gráfico de idade.
         left, right = st.columns([1.05, 1.2])
         with left:
-            idade = (
+            idade_counts = cast(
+                pd.Series,
                 base.assign(Idade=base["Idade atual"].fillna(0).astype(int))
                 .groupby("Idade")
-                .size()
-                .reset_index(name="Quantidade de máquinas")
+                .size(),
+            )
+            idade = (
+                idade_counts.rename("Quantidade de máquinas")
+                .to_frame()
+                .reset_index()
                 .rename(columns={"Idade": "idade_int (a)"})
             )
             st.plotly_chart(
@@ -345,7 +374,9 @@ def show() -> None:
             if st.session_state['config']['relacaoReparosIdade']:
                 with st.container(key="container-graph-faixas"):
                     pass
-                    idade_maxima = max(0, int(idade['idade_int (a)'].max()))
+                    idade_maxima = max(
+                        0, _as_int(idade['idade_int (a)'].max())
+                    )
                     idade_maxima = max(0, 10)
                     idade_corte_key = "idade_corte_reparacoes"
 
@@ -509,14 +540,10 @@ def show() -> None:
 
     with tab_renovacao:
         max_machines = len(base)
-        scenario_quantity_key = "quantidade_cenario_renovacao"
-        default_quantity = max(
-            1,
-            min(
-                int(base["Idade atual"].gt(idade_corte).sum()),
-                max_machines,
-            ),
-        )
+        # A nova chave aplica o critério atualizado também a sessões que ainda
+        # conservavam o valor padrão anterior, baseado na idade de corte.
+        scenario_quantity_key = "quantidade_cenario_renovacao_prioritaria"
+        default_quantity = renewal_analysis.quantidade_padrao_cenario(base)
         if scenario_quantity_key not in st.session_state:
             st.session_state[scenario_quantity_key] = default_quantity
         else:
@@ -529,7 +556,8 @@ def show() -> None:
             min_value=1,
             max_value=max_machines,
             help=(
-                "O valor inicial corresponde às máquinas acima da idade de corte. "
+                "O valor inicial corresponde às máquinas classificadas como "
+                "Troca prioritária. "
                 "Depois, pode ser ajustado para selecionar as máquinas com maior "
                 "índice analítico. Os percentuais "
                 "mostram concentração histórica no período, não redução garantida."
@@ -599,8 +627,8 @@ def show() -> None:
             _analytical_table(selected, None),
             f'''
             máquinas selecionadas para renovação
-            que juntas somam {formatters.br_num(selected['Reparações no período'].sum(), 0)} reparações 
-            com custo total de {formatters.br_num(selected['Custo com impostos'].sum(), 2)}
+            que juntas somam {_numero(selected['Reparações no período'].sum(), 0)} reparações
+            com custo total de {_numero(selected['Custo com impostos'].sum(), 2)}
             '''
         )
         download_xlsx.download(df=_analytical_table(selected, None), key='renovacao')
@@ -733,13 +761,15 @@ def show() -> None:
             )
         cliente_padrao = clientes[0] if len(clientes) == 1 else ""
         responsavel_padrao = auth.get_authenticated_name()
-        quantidade_relatorio = int(
+        quantidade_relatorio = _as_int(
             st.session_state.get(
-                "quantidade_cenario_renovacao",
-                min(20, len(base)),
+                "quantidade_cenario_renovacao_prioritaria",
+                renewal_analysis.quantidade_padrao_cenario(base),
             )
         )
-        idade_maxima_relatorio = max(1, int(base["Idade atual"].max()))
+        idade_maxima_relatorio = max(
+            1, _as_int(base["Idade atual"].max())
+        )
         idade_corte_relatorio = min(
             max(
                 0,
@@ -827,7 +857,7 @@ def show() -> None:
                 cargo_responsavel=cargo_relatorio.strip() or "Não informado",
                 data_emissao=date.today(),
                 data_inicio=date(min(anos_selecionados), 1, 1),
-                data_fim=pd.Timestamp(data_corte).date(),
+                data_fim=cast(date, pd.Timestamp(data_corte).date()),
                 idade_corte=int(idade_corte_pdf),
                 fator_impostos=float(fator_impostos),
                 quantidade_cenario=int(quantidade_pdf),

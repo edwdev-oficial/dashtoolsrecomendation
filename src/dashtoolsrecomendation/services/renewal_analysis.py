@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Iterable
+from typing import Any, Iterable, cast
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,19 @@ import pandas as pd
 ANALYSIS_START_YEAR = 1900
 DEFAULT_TAX_FACTOR = 1.4
 SERIAL_COLUMNS = ("Número de Série", "Número de série")
+
+
+def _column(frame: pd.DataFrame, name: str) -> pd.Series:
+    """Retorna uma coluna com o tipo escalar esperado pelo serviço."""
+    return cast(pd.Series, frame[name])
+
+
+def _as_float(value: object) -> float:
+    return float(cast(Any, value))
+
+
+def _as_int(value: object) -> int:
+    return int(_as_float(value))
 
 
 @dataclass(frozen=True)
@@ -50,23 +63,29 @@ def _serie_canonica(df: pd.DataFrame) -> pd.Series:
     if not aliases:
         return pd.Series(pd.NA, index=df.index, dtype="string")
 
-    result = normalizar_numero_serie(df[aliases[0]])
+    result = normalizar_numero_serie(_column(df, aliases[0]))
     for column in aliases[1:]:
-        result = result.fillna(normalizar_numero_serie(df[column]))
+        result = result.fillna(
+            normalizar_numero_serie(_column(df, column))
+        )
     return result
 
 
 def _numeric(df: pd.DataFrame, column: str) -> pd.Series:
     if column not in df.columns:
         return pd.Series(0.0, index=df.index, dtype="float64")
-    return pd.to_numeric(df[column], errors="coerce").fillna(0.0)
+    numeric = cast(
+        pd.Series,
+        pd.to_numeric(_column(df, column), errors="coerce"),
+    )
+    return numeric.fillna(0.0)
 
 
 def _text(df: pd.DataFrame, column: str, default: str = "") -> pd.Series:
     if column not in df.columns:
         return pd.Series(default, index=df.index, dtype="string")
     return (
-        df[column]
+        _column(df, column)
         .astype("string")
         .str.strip()
         .replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
@@ -82,9 +101,14 @@ def preparar_ams_periodo(
     """Normaliza a base AMS e limita a análise à janela e às séries selecionadas."""
     result = df_ams.copy()
     result["Número de Série"] = _serie_canonica(result)
-    result["ano_reparo"] = pd.to_numeric(
-        result.get("ano_reparo", pd.Series(pd.NA, index=result.index)),
-        errors="coerce",
+    ano_reparo = (
+        _column(result, "ano_reparo")
+        if "ano_reparo" in result.columns
+        else pd.Series(pd.NA, index=result.index)
+    )
+    result["ano_reparo"] = cast(
+        pd.Series,
+        pd.to_numeric(ano_reparo, errors="coerce"),
     ).astype("Int64")
 
     for column in [
@@ -106,7 +130,10 @@ def preparar_ams_periodo(
 
     anos_validos = sorted({int(ano) for ano in anos if pd.notna(ano)})
     if anos_validos:
-        result = result[result["ano_reparo"].isin(anos_validos)]
+        result = cast(
+            pd.DataFrame,
+            result[_column(result, "ano_reparo").isin(anos_validos)],
+        )
     else:
         result = result.iloc[0:0]
 
@@ -116,9 +143,16 @@ def preparar_ams_periodo(
             for serie in series
             if pd.notna(serie) and str(serie).strip()
         }
-        result = result[result["Número de Série"].isin(series_validas)]
+        result = cast(
+            pd.DataFrame,
+            result[
+                _column(result, "Número de Série").isin(
+                    list(series_validas)
+                )
+            ],
+        )
 
-    return result.reset_index(drop=True)
+    return cast(pd.DataFrame, result.reset_index(drop=True))
 
 
 def _anos_observados(
@@ -128,7 +162,9 @@ def _anos_observados(
     if not anos_selecionados:
         return pd.Series(0, index=data_compra.index, dtype="int64")
 
-    compra = pd.to_datetime(data_compra, errors="coerce")
+    compra = cast(
+        pd.Series, pd.to_datetime(data_compra, errors="coerce")
+    )
     ano_compra = compra.dt.year
     observed = pd.Series(0, index=data_compra.index, dtype="int64")
     for ano in anos_selecionados:
@@ -137,7 +173,9 @@ def _anos_observados(
 
 
 def _percentile_score(series: pd.Series) -> pd.Series:
-    numeric = pd.to_numeric(series, errors="coerce").fillna(0)
+    numeric = cast(
+        pd.Series, pd.to_numeric(series, errors="coerce")
+    ).fillna(0)
     if numeric.empty or numeric.nunique(dropna=False) <= 1:
         return pd.Series(0.0, index=series.index)
     return numeric.rank(method="average", pct=True).fillna(0)
@@ -153,9 +191,9 @@ def _classificar_prioridade(row: pd.Series) -> str:
     if _is_frota_ativa(row):
         return "Manter"
 
-    reparos = float(row["Reparações no período"])
-    score = float(row["Índice de prioridade"])
-    idade = float(row["Idade atual"])
+    reparos = _as_float(row["Reparações no período"])
+    score = _as_float(row["Índice de prioridade"])
+    idade = _as_float(row["Idade atual"])
 
     if reparos <= 0:
         return "Monitorar" if idade >= 8 else "Manter"
@@ -206,16 +244,26 @@ def preparar_base_maquinas(
     """
     weights.validate()
     anos_validos = sorted({int(ano) for ano in anos if pd.notna(ano)})
-    referencia = pd.Timestamp(data_corte or pd.Timestamp.today()).normalize()
+    referencia = cast(
+        pd.Timestamp,
+        pd.Timestamp(
+            data_corte if data_corte is not None else pd.Timestamp.today()
+        ),
+    ).normalize()
 
     parque = df_parque.copy()
     parque["Número de Série"] = _serie_canonica(parque)
     parque = parque.dropna(subset=["Número de Série"])
     parque = parque.drop_duplicates("Número de Série", keep="last")
 
-    data_compra = pd.to_datetime(
-        parque.get("Data de compra", pd.Series(pd.NaT, index=parque.index)),
-        errors="coerce",
+    data_compra_origem = (
+        _column(parque, "Data de compra")
+        if "Data de compra" in parque.columns
+        else pd.Series(pd.NaT, index=parque.index)
+    )
+    data_compra = cast(
+        pd.Series,
+        pd.to_datetime(data_compra_origem, errors="coerce"),
     )
     idade_calculada = (referencia - data_compra).dt.days / 365.2425
     idade_existente = _numeric(parque, "idade_int (a)").astype(float)
@@ -237,7 +285,7 @@ def preparar_base_maquinas(
     ams = preparar_ams_periodo(
         df_ams,
         anos_validos,
-        series=parque["Número de Série"],
+        series=_column(parque, "Número de Série"),
     )
     ams["Tem reparo"] = ams["# Reparos"].gt(0)
 
@@ -257,7 +305,8 @@ def preparar_base_maquinas(
             ]
         )
     else:
-        aggregate = (
+        aggregate = cast(
+            pd.DataFrame,
             ams.groupby("Número de Série", as_index=False)
             .agg(
                 **{
@@ -286,7 +335,7 @@ def preparar_base_maquinas(
                     ),
                     "Modelo AMS": ("Modelo", "last"),
                 }
-            )
+            ),
         )
 
     result = parque.merge(
@@ -305,12 +354,13 @@ def preparar_base_maquinas(
         "Anos com reparação",
     ]
     for column in numeric_columns:
-        result[column] = pd.to_numeric(result[column], errors="coerce").fillna(0)
+        result[column] = _numeric(result, column)
 
     if "Modelo AMS" in result.columns:
-        modelo_ams = result["Modelo AMS"].astype("string").str.strip()
-        result["Modelo"] = result["Modelo"].mask(
-            result["Modelo"].eq("Não identificado") & modelo_ams.notna(),
+        modelo_ams = _column(result, "Modelo AMS").astype("string").str.strip()
+        modelo = _column(result, "Modelo")
+        result["Modelo"] = modelo.mask(
+            modelo.eq("Não identificado") & modelo_ams.notna(),
             modelo_ams,
         )
 
@@ -321,7 +371,7 @@ def preparar_base_maquinas(
     )
     result["Máquina reparada"] = result["Reparações no período"].gt(0)
     result["Anos observados"] = _anos_observados(
-        result["Data de compra"], anos_validos
+        _column(result, "Data de compra"), anos_validos
     )
     result["Reparações por ano observado"] = (
         result["Reparações no período"]
@@ -332,12 +382,18 @@ def preparar_base_maquinas(
         / result["Anos observados"].replace(0, np.nan)
     ).fillna(0).clip(0, 1)
 
-    result["Percentil idade"] = _percentile_score(result["Idade atual"])
-    result["Percentil frequência"] = _percentile_score(
-        result["Reparações por ano observado"]
+    result["Percentil idade"] = _percentile_score(
+        _column(result, "Idade atual")
     )
-    result["Percentil custo"] = _percentile_score(result["Custo com impostos"])
-    result["Percentil recorrência"] = _percentile_score(result["Recorrência"])
+    result["Percentil frequência"] = _percentile_score(
+        _column(result, "Reparações por ano observado")
+    )
+    result["Percentil custo"] = _percentile_score(
+        _column(result, "Custo com impostos")
+    )
+    result["Percentil recorrência"] = _percentile_score(
+        _column(result, "Recorrência")
+    )
 
     result["Índice de prioridade"] = 100 * (
         weights.idade * result["Percentil idade"]
@@ -356,22 +412,42 @@ def preparar_base_maquinas(
 
 
 def resumo_executivo(base: pd.DataFrame) -> dict[str, float]:
-    maquinas = int(base["Número de Série"].nunique()) if not base.empty else 0
-    reparadas = int(base["Máquina reparada"].sum()) if not base.empty else 0
-    reparacoes = float(base["Reparações no período"].sum()) if not base.empty else 0
-    custo = float(base["Custo com impostos"].sum()) if not base.empty else 0
+    maquinas = (
+        _as_int(_column(base, "Número de Série").nunique())
+        if not base.empty
+        else 0
+    )
+    reparadas = (
+        _as_int(_column(base, "Máquina reparada").sum())
+        if not base.empty
+        else 0
+    )
+    reparacoes = (
+        _as_float(_column(base, "Reparações no período").sum())
+        if not base.empty
+        else 0
+    )
+    custo = (
+        _as_float(_column(base, "Custo com impostos").sum())
+        if not base.empty
+        else 0
+    )
     pago = (
-        float(base["Pago pelo cliente com impostos"].sum())
+        _as_float(_column(base, "Pago pelo cliente com impostos").sum())
         if not base.empty
         else 0
     )
     absorvido = (
-        float(base["Valor absorvido com impostos"].sum())
+        _as_float(_column(base, "Valor absorvido com impostos").sum())
         if not base.empty
         else 0
     )
     prioritarias = (
-        int(base["Recomendação"].eq("Troca prioritária").sum())
+        _as_int(
+            _column(base, "Recomendação")
+            .eq("Troca prioritária")
+            .sum()
+        )
         if not base.empty
         else 0
     )
@@ -431,7 +507,8 @@ def analise_faixas_idade(
 def analise_modelos(base: pd.DataFrame) -> pd.DataFrame:
     if base.empty:
         return pd.DataFrame()
-    result = (
+    result = cast(
+        pd.DataFrame,
         base.groupby("Modelo", as_index=False)
         .agg(
             Máquinas=("Número de Série", "nunique"),
@@ -447,19 +524,25 @@ def analise_modelos(base: pd.DataFrame) -> pd.DataFrame:
                     lambda values: values.eq("Troca prioritária").sum(),
                 ),
             },
-        )
+        ),
     )
-    denominator = result["Máquinas"].replace(0, np.nan)
+    denominator = _column(result, "Máquinas").replace(0, np.nan)
     result["Reparações por máquina"] = (
-        result["Reparações"] / denominator
+        _column(result, "Reparações") / denominator
     ).fillna(0)
-    result["Custo por máquina"] = (result["Custo"] / denominator).fillna(0)
+    result["Custo por máquina"] = (
+        _column(result, "Custo") / denominator
+    ).fillna(0)
     result["Percentual reparadas"] = (
-        result["Máquinas reparadas"] / denominator
+        _column(result, "Máquinas reparadas") / denominator
     ).fillna(0)
-    return result.sort_values(
-        ["Reparações por máquina", "Custo por máquina"], ascending=False
-    ).reset_index(drop=True)
+    return cast(
+        pd.DataFrame,
+        result.sort_values(
+            ["Reparações por máquina", "Custo por máquina"],
+            ascending=False,
+        ).reset_index(drop=True),
+    )
 
 
 def analise_anual(
@@ -471,7 +554,12 @@ def analise_anual(
     tax_factor: float = DEFAULT_TAX_FACTOR,
     projetar_ano_parcial: bool = False,
 ) -> pd.DataFrame:
-    referencia = pd.Timestamp(data_corte or pd.Timestamp.today()).normalize()
+    referencia = cast(
+        pd.Timestamp,
+        pd.Timestamp(
+            data_corte if data_corte is not None else pd.Timestamp.today()
+        ),
+    ).normalize()
     ams = preparar_ams_periodo(df_ams, anos, series=series)
     if ams.empty:
         return pd.DataFrame(
@@ -485,23 +573,28 @@ def analise_anual(
             ]
         )
 
-    result = (
+    result = cast(
+        pd.DataFrame,
         ams.groupby("ano_reparo", as_index=False)
         .agg(
             **{
                 "Reparações realizadas": ("# Reparos", "sum"),
                 "Custo líquido": ("Custo de Reparos", "sum"),
             }
-        )
-        .rename(columns={"ano_reparo": "Ano"})
-        .sort_values("Ano")
+        ),
+    )
+    result = cast(
+        pd.DataFrame,
+        result.rename(columns={"ano_reparo": "Ano"}).sort_values("Ano"),
     )
     result["Custo realizado"] = result["Custo líquido"] * tax_factor
     result["Ano parcial"] = result["Ano"].eq(referencia.year)
     result["Reparações projetadas"] = result["Reparações realizadas"].astype(float)
     result["Custo projetado"] = result["Custo realizado"].astype(float)
 
-    if projetar_ano_parcial and referencia.year in set(result["Ano"]):
+    if projetar_ano_parcial and referencia.year in set(
+        _column(result, "Ano").tolist()
+    ):
         inicio = pd.Timestamp(year=referencia.year, month=1, day=1)
         fim = pd.Timestamp(year=referencia.year, month=12, day=31)
         fracao = max((referencia - inicio).days + 1, 1) / ((fim - inicio).days + 1)
@@ -529,18 +622,36 @@ def composicao_custo(base: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def quantidade_padrao_cenario(base: pd.DataFrame) -> int:
+    """Define o cenário inicial pela quantidade de trocas prioritárias."""
+    if base.empty:
+        return 0
+
+    prioritarias = _as_int(
+        _column(base, "Recomendação").eq("Troca prioritária").sum()
+    )
+    # A interface e o PDF exigem ao menos uma posição no cenário.
+    return max(1, min(prioritarias, len(base)))
+
+
 def cenario_renovacao(base: pd.DataFrame, quantidade: int) -> tuple[pd.DataFrame, dict[str, float]]:
     quantidade_solicitada = max(0, int(quantidade))
-    elegiveis = (
-        base.loc[base["Recomendação"].ne("Manter")]
-        .sort_values("Índice de prioridade", ascending=False, kind="stable")
+    elegiveis = cast(
+        pd.DataFrame,
+        base.loc[_column(base, "Recomendação").ne("Manter")],
+    ).sort_values(
+        "Índice de prioridade", ascending=False, kind="stable"
     )
     selected = elegiveis.head(quantidade_solicitada).copy()
     quantidade_selecionada = len(selected)
-    total_reparacoes = float(base["Reparações no período"].sum())
-    total_custo = float(base["Custo com impostos"].sum())
-    reparacoes = float(selected["Reparações no período"].sum())
-    custo = float(selected["Custo com impostos"].sum())
+    total_reparacoes = _as_float(
+        _column(base, "Reparações no período").sum()
+    )
+    total_custo = _as_float(_column(base, "Custo com impostos").sum())
+    reparacoes = _as_float(
+        _column(selected, "Reparações no período").sum()
+    )
+    custo = _as_float(_column(selected, "Custo com impostos").sum())
 
     summary = {
         "maquinas": quantidade_selecionada,
@@ -551,7 +662,9 @@ def cenario_renovacao(base: pd.DataFrame, quantidade: int) -> tuple[pd.DataFrame
         "custo": custo,
         "percentual_custo": custo / total_custo if total_custo else 0,
         "idade_media": (
-            float(selected["Idade atual"].mean()) if quantidade_selecionada else 0
+            _as_float(_column(selected, "Idade atual").mean())
+            if quantidade_selecionada
+            else 0
         ),
     }
     return selected, summary
@@ -559,10 +672,11 @@ def cenario_renovacao(base: pd.DataFrame, quantidade: int) -> tuple[pd.DataFrame
 
 def dados_pareto(base: pd.DataFrame) -> pd.DataFrame:
     data = base.sort_values("Custo com impostos", ascending=False).copy()
-    total = data["Custo com impostos"].sum()
+    custos = _column(data, "Custo com impostos")
+    total = _as_float(custos.sum())
     data["Posição"] = np.arange(1, len(data) + 1)
     data["Percentual acumulado"] = (
-        data["Custo com impostos"].cumsum() / total if total else 0
+        custos.cumsum() / total if total else 0
     )
     return data
 
@@ -576,28 +690,46 @@ def reconciliar_fontes(
     dashboard["Número de Série"] = _serie_canonica(dashboard)
 
     if "_presente_parque" in dashboard.columns:
-        presente_parque = dashboard["_presente_parque"].fillna(False).astype(bool)
+        presente_parque = (
+            _column(dashboard, "_presente_parque")
+            .fillna(False)
+            .astype(bool)
+        )
     else:
         # Em bases antigas sem marcador, considera o dataframe principal como parque.
-        presente_parque = dashboard["Número de Série"].notna()
+        presente_parque = _column(
+            dashboard, "Número de Série"
+        ).notna()
 
-    parque = dashboard.loc[presente_parque].dropna(subset=["Número de Série"])
-    parque_series = set(parque["Número de Série"])
+    parque = cast(
+        pd.DataFrame, dashboard.loc[presente_parque]
+    ).dropna(subset=["Número de Série"])
+    parque_series = set(_column(parque, "Número de Série"))
 
     ams = preparar_ams_periodo(df_ams, anos)
-    ams_series = set(ams["Número de Série"].dropna())
+    ams_series = set(_column(ams, "Número de Série").dropna())
     union = sorted(parque_series | ams_series)
 
     rows = []
-    parque_modelos = (
+    parque_indexado = cast(
+        pd.DataFrame,
         parque.drop_duplicates("Número de Série")
-        .set_index("Número de Série")
-        .get("Modelo", pd.Series(dtype="object"))
+        .set_index("Número de Série"),
+    )
+    ams_indexado = cast(
+        pd.DataFrame,
+        ams.drop_duplicates("Número de Série", keep="last")
+        .set_index("Número de Série"),
+    )
+    parque_modelos = (
+        _column(parque_indexado, "Modelo")
+        if "Modelo" in parque_indexado.columns
+        else pd.Series(dtype="object")
     )
     ams_modelos = (
-        ams.drop_duplicates("Número de Série", keep="last")
-        .set_index("Número de Série")
-        .get("Modelo", pd.Series(dtype="object"))
+        _column(ams_indexado, "Modelo")
+        if "Modelo" in ams_indexado.columns
+        else pd.Series(dtype="object")
     )
 
     for serie in union:
@@ -610,7 +742,7 @@ def reconciliar_fontes(
         else:
             status = "Somente no AMS do período"
         modelo = parque_modelos.get(serie, pd.NA)
-        if pd.isna(modelo) or not str(modelo).strip():
+        if bool(pd.isna(cast(Any, modelo))) or not str(modelo).strip():
             modelo = ams_modelos.get(serie, "Não identificado")
         rows.append(
             {

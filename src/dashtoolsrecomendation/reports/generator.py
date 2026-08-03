@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Literal, Sequence, cast
 from xml.sax.saxutils import escape
 
 import pandas as pd
@@ -77,19 +77,19 @@ class NumberedCanvas(canvas.Canvas):
 
     def showPage(self) -> None:  # noqa: N802 - assinatura ReportLab
         self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
+        self._startPage()  # type: ignore[attr-defined] - API interna do ReportLab
 
     def save(self) -> None:
         total = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
-            page_width, _ = self._pagesize
+            page_width, _ = self._pagesize  # type: ignore[attr-defined]
             self.setFillColor(MUTED)
             self.setFont("Helvetica", 7)
             self.drawCentredString(
                 page_width / 2,
                 25,
-                f"{self._pageNumber} / {total}",
+                f"{self.getPageNumber()} / {total}",
             )
             super().showPage()
         super().save()
@@ -109,17 +109,22 @@ class _PreparedData:
     reconciliation_summary: dict[str, int]
 
 
-def _number(value: float, decimals: int = 0) -> str:
-    text = f"{float(value):,.{decimals}f}"
+def _as_float(value: object) -> float:
+    """Converte um valor escalar, inclusive escalares NumPy/pandas."""
+    return float(cast(Any, value))
+
+
+def _number(value: object, decimals: int = 0) -> str:
+    text = f"{_as_float(value):,.{decimals}f}"
     return text.replace(",", "|").replace(".", ",").replace("|", ".")
 
 
-def _money(value: float, decimals: int = 2) -> str:
+def _money(value: object, decimals: int = 2) -> str:
     return f"R$ {_number(value, decimals)}"
 
 
-def _percent(value: float, decimals: int = 1) -> str:
-    return f"{_number(float(value) * 100, decimals)}%"
+def _percent(value: object, decimals: int = 1) -> str:
+    return f"{_number(_as_float(value) * 100, decimals)}%"
 
 
 def _date_br(value: date | pd.Timestamp) -> str:
@@ -127,7 +132,7 @@ def _date_br(value: date | pd.Timestamp) -> str:
 
 
 def _safe_text(value: object, default: str = "-") -> str:
-    if value is None or pd.isna(value):
+    if value is None or bool(pd.isna(cast(Any, value))):
         return default
     text = str(value).strip()
     return text or default
@@ -141,7 +146,9 @@ def _trim_image_whitespace(image_bytes: bytes) -> bytes:
         flattened.alpha_composite(image)
         white = Image.new("RGB", image.size, (255, 255, 255))
         difference = ImageChops.difference(flattened.convert("RGB"), white).convert("L")
-        visible = difference.point(lambda value: 255 if value > 12 else 0)
+        visible = difference.point(
+            [0 if value <= 12 else 255 for value in range(256)]
+        )
         bbox = visible.getbbox()
         if bbox:
             padding = max(2, round(max(image.size) * 0.02))
@@ -352,7 +359,7 @@ class _ReportRenderer:
         size: float = 9,
         leading: float | None = None,
         color: Color = TEXT,
-        align: int = TA_LEFT,
+        align: Literal[0, 1, 2, 4] = TA_LEFT,
     ) -> float:
         style = ParagraphStyle(
             "dynamic",
@@ -629,8 +636,8 @@ class _ReportRenderer:
 
     def _scatter_priority(self, x: float, y: float, width: float, height: float) -> None:
         data = self.data.base
-        max_age = max(float(data["Idade atual"].max()), 1)
-        max_rep = max(float(data["Reparações no período"].max()), 1)
+        max_age = max(_as_float(data["Idade atual"].max()), 1)
+        max_rep = max(_as_float(data["Reparações no período"].max()), 1)
         plot_x, plot_y = x + 32, y + 23
         plot_w, plot_h = width - 42, height - 34
         self.c.setStrokeColor(GRID)
@@ -640,8 +647,8 @@ class _ReportRenderer:
             self.c.line(plot_x, ty, plot_x + plot_w, ty)
         sample = data if len(data) <= 800 else data.iloc[:: max(1, len(data) // 800)]
         for _, row in sample.iterrows():
-            px = plot_x + float(row["Idade atual"]) / max_age * plot_w
-            py = plot_y + float(row["Reparações no período"]) / max_rep * plot_h
+            px = plot_x + _as_float(row["Idade atual"]) / max_age * plot_w
+            py = plot_y + _as_float(row["Reparações no período"]) / max_rep * plot_h
             recommendation = _safe_text(row.get("Recomendação", ""), "")
             self.c.setFillColor(RED if recommendation == "Troca prioritária" else BEIGE)
             radius = 2.2 if recommendation == "Troca prioritária" else 1.5
@@ -659,21 +666,21 @@ class _ReportRenderer:
         data = self.data.pareto
         if data.empty:
             return
-        max_cost = max(float(data["Custo com impostos"].max()), 1)
+        max_cost = max(_as_float(data["Custo com impostos"].max()), 1)
         plot_x, plot_y = x + 35, y + 25
         plot_w, plot_h = width - 50, height - 38
         sample_limit = min(len(data), 180)
         sampled = data.head(sample_limit)
         slot = plot_w / max(sample_limit, 1)
         for index, (_, row) in enumerate(sampled.iterrows()):
-            cost = float(row["Custo com impostos"])
+            cost = _as_float(row["Custo com impostos"])
             bar_h = plot_h * cost / max_cost
             self.c.setFillColor(RED if index < len(self.data.selected) else BEIGE)
             self.c.rect(plot_x + index * slot, plot_y, max(slot, 0.5), bar_h, fill=1, stroke=0)
         points: list[tuple[float, float]] = []
         for index, (_, row) in enumerate(sampled.iterrows()):
             px = plot_x + (index + 0.5) * slot
-            py = plot_y + float(row["Percentual acumulado"]) * plot_h
+            py = plot_y + _as_float(row["Percentual acumulado"]) * plot_h
             points.append((px, py))
         self.c.setStrokeColor(TEXT)
         self.c.setLineWidth(1.2)
@@ -687,7 +694,7 @@ class _ReportRenderer:
     # ---------- Tables ----------
     def _table(
         self,
-        rows: list[list[object]],
+        rows: Sequence[Sequence[object]],
         col_widths: Sequence[float],
         x: float,
         y_top: float,
@@ -756,8 +763,8 @@ class _ReportRenderer:
             )
             .reindex(order, fill_value=0)
         )
-        total_repairs = max(float(grouped["Reparações"].sum()), 1)
-        total_cost = max(float(grouped["Custo"].sum()), 1)
+        total_repairs = max(_as_float(grouped["Reparações"].sum()), 1)
+        total_cost = max(_as_float(grouped["Custo"].sum()), 1)
 
         headers = [
             "Recomendação",
@@ -800,12 +807,12 @@ class _ReportRenderer:
             self.c.setLineWidth(0.35)
             self.c.line(x, row_bottom, x + CONTENT_W, row_bottom)
 
-            row = grouped.loc[recommendation]
+            row = cast(pd.Series, grouped.loc[recommendation])
             values = [
                 _number(row["Máquinas"]),
                 _number(row["Reparações"]),
-                _percent(float(row["Reparações"]) / total_repairs),
-                _percent(float(row["Custo"]) / total_cost),
+                _percent(_as_float(row["Reparações"]) / total_repairs),
+                _percent(_as_float(row["Custo"]) / total_cost),
             ]
 
             self.c.setFont("Helvetica-Bold", 6.2)
@@ -1074,9 +1081,15 @@ class _ReportRenderer:
             .sort_index()
         )
         labels = [str(value) for value in age_counts.index.tolist()]
-        values = age_counts.values.tolist()
+        values = [_as_float(value) for value in age_counts.to_numpy()]
         self._vertical_bars(MARGIN + 5, y - 245, 300, 180, labels, values, title="Distribuição por idade (anos)")
-        older = int(self.data.base["Idade atual"].gt(self.config.idade_corte).sum())
+        older = int(
+            _as_float(
+                self.data.base["Idade atual"]
+                .gt(self.config.idade_corte)
+                .sum()
+            )
+        )
         cards = [
             (f"MÁQUINAS ACIMA DE {self.config.idade_corte} ANOS", _number(older), _percent(older / len(self.data.base))),
             ("MÁQUINAS NO CENÁRIO", _number(self.data.cenario["maquinas"]), "Lista priorizada"),
@@ -1098,10 +1111,10 @@ class _ReportRenderer:
         model_table = self.data.modelos.head(7)
         rows = [["Modelo", "Máquinas", "Participação", "Idade média", "Reparadas", "Prioritárias"]]
         for _, row in model_table.iterrows():
-            machines = float(row["Máquinas"])
+            machines = _as_float(row["Máquinas"])
             rows.append(
                 [
-                    row["Modelo"],
+                    _safe_text(row["Modelo"]),
                     _number(machines),
                     _percent(machines / self.data.resumo["maquinas"]),
                     f"{_number(row['Idade média'], 1)} anos",
@@ -1121,9 +1134,19 @@ class _ReportRenderer:
             title_size=24,
         )
         annual = self.data.annual
-        labels = annual.get("Ano", pd.Series(dtype=int)).astype(str).tolist()
-        repairs = annual.get("Reparações realizadas", pd.Series(dtype=float)).tolist()
-        costs = annual.get("Custo realizado", pd.Series(dtype=float)).tolist()
+        labels = (
+            annual["Ano"].astype(str).tolist() if "Ano" in annual else []
+        )
+        repairs = (
+            annual["Reparações realizadas"].tolist()
+            if "Reparações realizadas" in annual
+            else []
+        )
+        costs = (
+            annual["Custo realizado"].tolist()
+            if "Custo realizado" in annual
+            else []
+        )
         self._vertical_bars(MARGIN, y - 245, 235, 185, labels, repairs, title="Reparações por ano")
         self._vertical_bars(
             MARGIN + 260,
@@ -1266,7 +1289,7 @@ class _ReportRenderer:
         for _, row in top.iterrows():
             rows.append(
                 [
-                    row["Modelo"],
+                    _safe_text(row["Modelo"]),
                     _number(row["Máquinas"]),
                     _number(row["Reparações"]),
                     _money(row["Custo"]),
@@ -1913,8 +1936,10 @@ class _ReportRenderer:
         plot_y += 9
         plot_h -= 13
         data = self.data.base
-        max_age = max(float(data["Idade atual"].max()), 1)
-        max_repairs = max(float(data["Reparações no período"].max()), 1)
+        max_age = max(_as_float(data["Idade atual"].max()), 1)
+        max_repairs = max(
+            _as_float(data["Reparações no período"].max()), 1
+        )
         self.c.setStrokeColor(HexColor("#5B575E"))
         self.c.setLineWidth(0.25)
         for tick in range(1, 4):
@@ -1932,10 +1957,12 @@ class _ReportRenderer:
             "Manter": BEIGE,
         }
         for _, row in sample.iterrows():
-            px = plot_x + float(row["Idade atual"]) / max_age * plot_w
+            px = plot_x + _as_float(row["Idade atual"]) / max_age * plot_w
             py = (
                 plot_y
-                + float(row["Reparações no período"]) / max_repairs * plot_h
+                + _as_float(row["Reparações no período"])
+                / max_repairs
+                * plot_h
             )
             priority = _safe_text(row.get("Recomendação"), "")
             self.c.setFillColor(recommendation_colors.get(priority, BEIGE))
@@ -1988,16 +2015,16 @@ class _ReportRenderer:
             values = data["Custo com impostos"].astype(float)
         if data.empty:
             return
-        maximum = max(float(values.max()), 1)
+        maximum = max(_as_float(values.max()), 1)
         slot = plot_w / len(data)
         selected_series = set(
             self.data.selected["Número de Série"].astype(str)
         )
         cumulative: list[tuple[float, float]] = []
         running = 0.0
-        total = max(float(values.sum()), 1)
+        total = max(_as_float(values.sum()), 1)
         for index, ((_, row), value) in enumerate(zip(data.iterrows(), values)):
-            bar_height = plot_h * float(value) / maximum
+            bar_height = plot_h * _as_float(value) / maximum
             is_selected = _series_value(row) in selected_series
             self.c.setFillColor(RED if is_selected else BEIGE)
             self.c.rect(
@@ -2008,7 +2035,7 @@ class _ReportRenderer:
                 fill=1,
                 stroke=0,
             )
-            running += float(value)
+            running += _as_float(value)
             cumulative.append(
                 (
                     plot_x + (index + 0.5) * slot,
@@ -2272,7 +2299,9 @@ class _ReportRenderer:
                 .head(12)
             )
             cut = self.config.idade_corte
-            above_cut = int(self.data.base["Idade atual"].gt(cut).sum())
+            above_cut = int(
+                _as_float(self.data.base["Idade atual"].gt(cut).sum())
+            )
             top_quantity = min(20, len(self.data.base))
             _, top_scenario = renewal_analysis.cenario_renovacao(
                 self.data.base,

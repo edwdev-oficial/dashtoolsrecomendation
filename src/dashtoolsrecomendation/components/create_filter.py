@@ -1,49 +1,19 @@
+from __future__ import annotations
+
+import re
+from typing import Literal, overload
+
 import pandas as pd
 import streamlit as st
 
 
-def create_filter(
-    df: pd.DataFrame,
-    coluna: str,
-    tilte: str,
-    sidebar: bool = True,
-    type: str = "selectbox",
-    key: str | None = None,
-    default_all: bool = False,
-):
-    df_use = df.copy()
-
-    if coluna not in df_use.columns:
-        return [] if type == "multiselect" else ""
-
-    df_use[coluna] = df_use[coluna].astype("string")
-
-    tem_numero = df_use[coluna].str.contains(r"\d", na=False).any()
-
-    if tem_numero:
-        df_use["prefixo"] = (
-            df_use[coluna]
-            .str.extract(r"([A-Za-z]+(?:-[A-Za-z]+)?)")[0]
-            .fillna("")
-        )
-
-        df_use["numero"] = pd.to_numeric(
-            df_use[coluna].str.extract(r"(\d+)")[0],
-            errors="coerce"
-        ).fillna(999999)
-
-        df_use = (
-            df_use
-            .sort_values(["prefixo", "numero", coluna])
-            .drop(columns=["prefixo", "numero"])
-        )
-    else:
-        df_use = df_use.sort_values(coluna)
+def _sorted_values(df: pd.DataFrame, column: str) -> list[str]:
+    if column not in df.columns:
+        return []
 
     values = (
-        df_use[coluna]
-        .dropna()
-        .astype(str)
+        df[column]
+        .astype("string")
         .str.strip()
         .replace("", pd.NA)
         .dropna()
@@ -51,63 +21,93 @@ def create_filter(
         .tolist()
     )
 
+    def sort_key(value: str) -> tuple[str, int, str]:
+        prefix_match = re.search(r"[A-Za-z]+(?:-[A-Za-z]+)?", value)
+        number_match = re.search(r"\d+", value)
+        prefix = prefix_match.group(0) if prefix_match else ""
+        number = int(number_match.group(0)) if number_match else 999999
+        return prefix.casefold(), number, value.casefold()
+
+    return sorted((str(value) for value in values), key=sort_key)
+
+
+@overload
+def create_filter(
+    df: pd.DataFrame,
+    coluna: str,
+    tilte: str,
+    sidebar: bool = True,
+    type: Literal["selectbox"] = "selectbox",
+    key: str | None = None,
+    default_all: bool = False,
+) -> str: ...
+
+
+@overload
+def create_filter(
+    df: pd.DataFrame,
+    coluna: str,
+    tilte: str,
+    sidebar: bool = True,
+    type: Literal["multiselect"] = "multiselect",
+    key: str | None = None,
+    default_all: bool = False,
+) -> list[str]: ...
+
+
+def create_filter(
+    df: pd.DataFrame,
+    coluna: str,
+    tilte: str,
+    sidebar: bool = True,
+    type: Literal["selectbox", "multiselect"] = "selectbox",
+    key: str | None = None,
+    default_all: bool = False,
+) -> str | list[str]:
+    """Cria um filtro cujo valor vazio significa ausência de restrição.
+
+    ``default_all`` foi mantido para compatibilidade com as chamadas existentes.
+    Selecionar todos os itens e não selecionar nenhum item têm a mesma semântica,
+    portanto o estado canônico de "Todos" é sempre vazio.
+    """
+    key = key or f"filter_{coluna}_{type}"
+    del default_all
+
+    # Remove a segunda fonte de estado usada pela implementação anterior.
+    st.session_state.pop(f"{key}_persist", None)
+
+    if coluna not in df.columns:
+        st.session_state.pop(key, None)
+        return [] if type == "multiselect" else ""
+
+    options = _sorted_values(df, coluna)
     widget_area = st.sidebar if sidebar else st
 
-    if key is None:
-        key = f"filter_{coluna}_{type}"
-
-    state_key = f"{key}_persist"
-
-    # =====================================================
-    # SELECTBOX
-    # =====================================================
     if type == "selectbox":
-        options = [""] + values
+        select_options = [""] + options
+        if st.session_state.get(key) not in select_options:
+            st.session_state[key] = ""
 
-        if state_key not in st.session_state:
-            st.session_state[state_key] = ""
-
-        # Se o valor salvo não existe mais após filtros anteriores, limpa
-        if st.session_state[state_key] not in options:
-            st.session_state[state_key] = ""
-
-        index = options.index(st.session_state[state_key])
-
-        valor = widget_area.selectbox(
+        return widget_area.selectbox(
             tilte,
-            options,
-            index=index,
-            key=key
+            select_options,
+            key=key,
+            format_func=lambda value: "Todos (sem restrição)" if value == "" else value,
         )
 
-        st.session_state[state_key] = valor
+    current = st.session_state.get(key, [])
+    if not isinstance(current, list):
+        current = []
+    current = [str(item) for item in current if str(item) in options]
 
-        return valor
+    # Normaliza também seleções explícitas de todas as opções para "sem restrição".
+    if options and set(current) == set(options):
+        current = []
+    st.session_state[key] = current
 
-    # =====================================================
-    # MULTISELECT
-    # =====================================================
-    elif type == "multiselect":
-        options = values
-
-        if state_key not in st.session_state:
-            st.session_state[state_key] = options.copy() if default_all else []
-
-        # Mantém apenas os selecionados que ainda existem após filtros acima
-        st.session_state[state_key] = [
-            item for item in st.session_state[state_key]
-            if item in options
-        ]
-
-        valor = widget_area.multiselect(
-            tilte,
-            options,
-            default=st.session_state[state_key],
-            key=key
-        )
-
-        st.session_state[state_key] = valor
-
-        return valor
-
-    return [] if type == "multiselect" else ""
+    return widget_area.multiselect(
+        tilte,
+        options,
+        key=key,
+        placeholder="Todos (sem restrição)",
+    )
