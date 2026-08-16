@@ -871,7 +871,7 @@ def page_8(c: canvas.Canvas, df: pd.DataFrame) -> None:
         CONTENT_W,
         58,
         "Leitura comercial",
-        "O resultado não decorre somente dos 9,8 anos. A prioridade máxima é explicada pela presença simultânea de idade elevada, frequência<br/>alta, custo elevado e reparações em todos os anos observados.",
+        "O resultado não decorre somente dos 9,8 anos. A prioridade máxima é explicada pela presença simultânea de idade elevada, frequência alta, custo elevado e reparações em todos os anos observados.",
     )
     c.showPage()
 
