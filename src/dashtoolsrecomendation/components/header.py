@@ -12,7 +12,8 @@ GRAPH_TITLES = {
     "Listas",
     "Adicionar TLM",
     "Configurações",
-    "Teste"
+    "Teste",
+    "Manual"
 }
 
 

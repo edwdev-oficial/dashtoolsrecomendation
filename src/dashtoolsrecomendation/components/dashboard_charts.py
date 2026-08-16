@@ -427,14 +427,14 @@ def grafico_matriz_prioridade(df: pd.DataFrame) -> Figure:
         size="Tamanho",
         color="Recomendação",
         color_discrete_map=RECOMMENDATION_COLORS,
-        hover_name="Número de Série",
-        hover_data={
-            "Modelo": True,
-            "Custo com impostos": ":,.2f",
-            "Índice de prioridade": ":.1f",
-            "Motivo principal": True,
-            "Tamanho": False,
-        },
+        hover_name="Modelo",
+        custom_data=[
+            "Número de Série",
+            "Recomendação",
+            "Custo com impostos",
+            "Índice de prioridade",
+            "Motivo principal",
+        ],
         title="Matriz de prioridade de renovação",
         labels={
             "Idade atual": "Idade atual (anos)",
@@ -445,6 +445,17 @@ def grafico_matriz_prioridade(df: pd.DataFrame) -> Figure:
     )
     fig.update_traces(
         marker=dict(line=dict(width=1, color="rgba(255,255,255,0.45)")),
+        hovertemplate=(
+            "<b>%{hovertext}</b>"
+            "<br>Nº de série: %{customdata[0]}"
+            "<br>Recomendação: %{customdata[1]}"
+            "<br>Idade atual (anos): %{x:.1f}"
+            "<br>Reparações registradas no período: %{y:,.0f}"
+            "<br>Custo com impostos: R$ %{customdata[2]:,.2f}"
+            "<br>Índice de prioridade: %{customdata[3]:.1f}"
+            "<br>Motivo principal: %{customdata[4]}"
+            "<extra></extra>"
+        ),
     )
     fig.update_layout(legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center"))
     return configurar_layout(fig, altura=430)

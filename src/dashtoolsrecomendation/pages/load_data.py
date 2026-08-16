@@ -121,14 +121,13 @@ def show():
         df_pq = pd.DataFrame()
         df_ams = pd.DataFrame()
 
-
-
         dfs_pq = []
         dfs_ams = []
         dfs_sap_group = []
         dfs_sap_split = []
 
         for file in files:
+            # st.write(f'Carregando arquivo: {file.name}')
             if file.name.lower().startswith('gestão de ferramentas'):
                 df = carregar_excel(file.getvalue())
                 if 'Razao Social' not in df.columns:
@@ -163,27 +162,30 @@ def show():
                 colunas,
             )
 
+            st.subheader('Report PQ', divider='red')
+
             st.session_state.df_pq_row = df_pq.copy()
 
             df_pq["_presente_parque"] = True
             df_pq["Descrição"] = df_pq["Descrição"].astype("string")
-            
 
-            df_pq = get_pq_normalizado.get(df_pq)
+            df_pq, df_not_normalizer = normalizar_itens(df_pq)
 
-            df_pq["Descrição"] = df_pq["Descrição"].astype("string")
-            df_pq["Duração do contrato"] = (
-                df_pq["Duração do contrato"]
-                .replace("-", 0)
-                .replace("", 0)
-                .fillna(0)
-                .astype(int)
-            )
+            # df_pq = get_pq_normalizado.get(df_pq)
 
-            df_not_normalizer = df_pq[
-                df_pq[['Tipo', 'Linha', 'Modelo']].isna().any(axis=1) |
-                df_pq[['Tipo', 'Linha', 'Modelo']].eq('').any(axis=1)
-            ]
+            # df_pq["Descrição"] = df_pq["Descrição"].astype("string")
+            # df_pq["Duração do contrato"] = (
+            #     df_pq["Duração do contrato"]
+            #     .replace("-", 0)
+            #     .replace("", 0)
+            #     .fillna(0)
+            #     .astype(int)
+            # )
+
+            # df_not_normalizer = df_pq[
+            #     df_pq[['Tipo', 'Linha', 'Modelo']].isna().any(axis=1) |
+            #     (df_pq[['Tipo', 'Linha', 'Modelo']] == '').any(axis=1)
+            # ]
 
             if df_not_normalizer.empty:
                 df_pq['Mensalidade c/Imp'] = round(df_pq['Mensalidade'] / (1-0.0925), 2) 
@@ -207,6 +209,21 @@ def show():
 
                 df_pq['Pago pelo Cliente'] = df_pq['Custo de Reparo']
                 st.session_state.df_pq = df_pq
+
+                st.dataframe(st.session_state.df_pq)
+                df_config.footer_df(st.session_state.df_pq, f"registros")
+
+                df_pq_filter = st.session_state.df_pq.copy()
+                serie = st.text_input(
+                    'Número de Série',
+                    key='filtro_numero_serie',
+                )
+                if serie:
+                    df_pq_filter = df_pq_filter[
+                        df_pq_filter['Número de série'] == serie
+                    ]
+                    st.dataframe(df_pq_filter)
+                    st.session_state.df_pq = df_pq_filter
 
             else:
                 st.warning('Existem equipamentos não normalizados log como adm para correção...')
@@ -256,7 +273,7 @@ def show():
             #         type='primary',
             #         key='limpar_filtro_ams'
             #     ):
-            #         st.session_state.series_ams = []
+                    # st.session_state.series_ams = []
 
             # if serie_ams:
             #     st.session_state.series_ams.append(serie_ams)
@@ -477,6 +494,25 @@ def show():
 
             st.session_state.df_pq = df_merge
 
+            st.subheader('Report Merge PQ + AMS', divider='red')
+            st.dataframe(st.session_state.df_pq)
+
+            df_pq_filtrado = st.session_state.df_pq.copy()
+            serie = st.text_input(
+                'Número de Série',
+                key='filtro_numero_serie_merge',
+            )
+            if serie:
+                df_pq_filtrado = df_pq_filtrado[
+                    (df_pq_filtrado['Número de série'] == serie)
+                    |
+                    (df_pq_filtrado['Número de Série'] == serie)
+                ]
+                st.dataframe(df_pq_filtrado)
+                st.session_state.df_pq = df_pq_filtrado
+
+            st.divider()
+
             # st.dataframe(
             #     df_merge,
             #     width='stretch'
@@ -530,7 +566,20 @@ def show():
         # region DF_SAP_GROUP
         # ========================================================
         if dfs_sap_group:
-            df_sap_group = data_processing.preparar_sap_group(pd.concat(dfs_sap_group))
+            pass
+            # df_sap_group = pd.concat(dfs_sap_group)
+            costumers = list(df_ams['Razao Social'].unique())
+            df_sap_group = data_processing.preparar_sap_group(pd.concat(dfs_sap_group), costumers)
+            df_sap_group.rename(columns={'Tool Type': 'Descrição'}, inplace=True)
+            df_sap_group, df_not_normalizer = normalizar_itens(df_sap_group)
+            df_sap_group.rename(columns={'Descrição': 'Tool Type'}, inplace=True)
+            if not df_not_normalizer.empty:
+                st.warning('Existem equipamentos não normalizados no df_sap_group log como adm para correção...')
+                st.session_state.df_descricoes_not_normalizer = pd.DataFrame({
+                    'Descrição': sorted(df_not_normalizer['Descrição'].dropna().unique())
+                })
+                st.stop()
+            st.session_state.df_sap_group = df_sap_group
             st.subheader('Report Group SAP', divider='red')
             st.dataframe(df_sap_group)
         # endregion
@@ -540,7 +589,24 @@ def show():
         # ========================================================
         # region DF_SAP_SPLIT
         # ========================================================
-        
+        if dfs_sap_split:
+            pass
+            # df_sap_split = pd.concat(dfs_sap_split)
+            serial_numbers = list(df_sap_group['Serial Number'].unique())
+            tool_types = list(df_sap_group['Tool Type'].unique())
+            df_sap_split = data_processing.preparar_sap_split(pd.concat(dfs_sap_split), serial_numbers, tool_types)
+            df_sap_split.rename(columns={'Tool Type': 'Descrição'}, inplace=True)
+            df_sap_split, df_not_normalizer = normalizar_itens(df_sap_split)
+            df_sap_split.rename(columns={'Descrição': 'Tool Type'}, inplace=True)
+            if not df_not_normalizer.empty:
+                st.warning('Existem equipamentos não normalizados no df_sap_split log como adm para correção...')
+                st.session_state.df_descricoes_not_normalizer = pd.DataFrame({
+                    'Descrição': sorted(df_not_normalizer['Descrição'].dropna().unique())
+                })
+                st.stop()
+            st.session_state.df_sap_split = df_sap_split
+            st.subheader('Report Split SAP', divider='red')
+            st.dataframe(df_sap_split)
         # endregion
         # ========================================================
 

@@ -11,6 +11,7 @@ from dashtoolsrecomendation.pages import (
     dashboard,
     add_tlm,
     config,
+    gerar_manual,
     teste,
 )
 
@@ -64,6 +65,12 @@ def main():
             'title': 'Configurações',
             'subtitle': 'Configurações administradas',
             'show': config.show
+        }
+        pages['Manual'] = {
+            'icon': 'journal-check',
+            'title': 'Manual',
+            'subtitle': 'Manual índice, prioridade e recomendação',
+            'show': gerar_manual.show
         }
         pages['Teste'] = {
             'icon': 'folder',

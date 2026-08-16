@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import re
+from dataclasses import replace
 from datetime import date
+from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pypdf import PdfReader
 
-from dashtoolsrecomendation.reports import PdfReportConfig, gerar_relatorio_pdf
+from dashtoolsrecomendation.reports import (
+    PdfReportConfig,
+    gerar_manual_metodologia_pdf,
+    gerar_relatorio_pdf,
+)
+from dashtoolsrecomendation.reports import generator_manual
 
 
 def _base_sintetica(quantidade: int = 35) -> pd.DataFrame:
@@ -97,3 +107,85 @@ def test_config_rejeita_quantidade_invalida() -> None:
         assert "ao menos uma máquina" in str(error)
     else:
         raise AssertionError("Era esperado ValueError para cenário vazio.")
+
+
+def _quantidade_paginas(pdf: bytes) -> int:
+    return len(re.findall(rb"/Type\s*/Page(?!s)", pdf))
+
+
+def test_manual_metodologia_e_opcional_e_acrescenta_anexo_e() -> None:
+    base = _base_sintetica()
+    config = PdfReportConfig(
+        cliente="Cliente Teste",
+        responsavel="Responsável Teste",
+        cargo_responsavel="Rental Hilti do Brasil",
+        data_emissao=date(2026, 8, 16),
+        data_inicio=date(2022, 1, 1),
+        data_fim=date(2026, 8, 16),
+        idade_corte=5,
+        fator_impostos=1.4,
+        quantidade_cenario=10,
+        incluir_base_completa=False,
+        incluir_manual_metodologia=False,
+    )
+
+    sem_manual = gerar_relatorio_pdf(
+        base=base,
+        df_ams=_ams_sintetico(base),
+        anos=[2022, 2023, 2024, 2025, 2026],
+        config=config,
+    )
+    com_manual = gerar_relatorio_pdf(
+        base=base,
+        df_ams=_ams_sintetico(base),
+        anos=[2022, 2023, 2024, 2025, 2026],
+        config=replace(config, incluir_manual_metodologia=True),
+    )
+
+    assert _quantidade_paginas(com_manual) == _quantidade_paginas(sem_manual) + 10
+    assert len(com_manual) > len(sem_manual)
+
+
+def test_gerar_manual_metodologia_pdf_retorna_dez_paginas_validas() -> None:
+    config = PdfReportConfig(
+        cliente="Cliente Teste",
+        responsavel="Responsável Teste",
+        cargo_responsavel="Rental Hilti do Brasil",
+        data_emissao=date(2026, 8, 16),
+        data_inicio=date(2022, 1, 1),
+        data_fim=date(2026, 8, 16),
+        idade_corte=5,
+        fator_impostos=1.4,
+        quantidade_cenario=1,
+    )
+
+    pdf = gerar_manual_metodologia_pdf(config=config)
+
+    assert pdf.startswith(b"%PDF-")
+    assert _quantidade_paginas(pdf) == 10
+    assert b"%%EOF" in pdf[-2_048:]
+
+    gerado = PdfReader(BytesIO(pdf))
+    assert len(gerado.pages) == 10
+    assert sum(len(list(page.images)) for page in gerado.pages) >= 1
+    texto = "\n".join(page.extract_text() for page in gerado.pages)
+    assert "MANUAL DE METODOLOGIA" in texto
+    assert "EXEMPLOS DE INTERPRETAÇÃO" in texto
+
+
+def test_manual_metodologia_delega_para_o_gerador_em_codigo(monkeypatch) -> None:
+    esperado = b"%PDF-manual-gerado-em-codigo"
+    monkeypatch.setattr(generator_manual, "generate_manual_bytes", lambda: esperado)
+    config = PdfReportConfig(
+        cliente="Cliente Teste",
+        responsavel="Responsável Teste",
+        cargo_responsavel="Rental Hilti do Brasil",
+        data_emissao=date(2026, 8, 16),
+        data_inicio=date(2022, 1, 1),
+        data_fim=date(2026, 8, 16),
+        idade_corte=5,
+        fator_impostos=1.4,
+        quantidade_cenario=1,
+    )
+
+    assert gerar_manual_metodologia_pdf(config=config) == esperado

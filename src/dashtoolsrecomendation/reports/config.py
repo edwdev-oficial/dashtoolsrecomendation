@@ -24,6 +24,7 @@ class PdfReportConfig:
     fator_impostos: float
     quantidade_cenario: int
     incluir_base_completa: bool = True
+    incluir_manual_metodologia: bool = False
     titulo: str = "Análise técnica e econômica para renovação do parque"
     subtitulo: str = (
         "Evidências de frequência de reparações,<br/>"

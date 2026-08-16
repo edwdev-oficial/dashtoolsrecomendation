@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
 .env
+/out/
+/scripts/
 *.log
 tutorial.md
 *.ipynb
@@ -16,3 +18,6 @@ inspect_parque_csv.py
 Manual_Metodologia_Indice_Prioridade_Renovacao.pdf
 Manual_Metodologia_Indice_Prioridade_Renovacao.md
 Manual_Metodologia_Indice_Prioridade_e_Recomendacao.pdf
+Manual_Metodologia_Indice_Prioridade_Renovacao.xlsx
+Manual_Metodologia_Indice_Prioridade_Renovacao_v2.pdf
+Manual_Metodologia_Indice_Prioridade_Renovacao_v2.md

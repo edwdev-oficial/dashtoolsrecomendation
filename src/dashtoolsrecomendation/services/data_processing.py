@@ -108,10 +108,36 @@ def preparar_ams(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def preparar_sap_group(df: pd.DataFrame) -> pd.DataFrame:
-    df = df[df[
-        ()
-    ]]
+def preparar_sap_group(df: pd.DataFrame, cust_names: list[str] = ['']) -> pd.DataFrame:
+    first_line = df.iloc[0]
+    new_names = {
+        coluna: valor
+        for coluna, valor in first_line.items()
+        if pd.notna(valor) and valor != ""
+    }
+    df.rename(columns=new_names, inplace=True)
+    df = df.iloc[1:].reset_index(drop=True)
+    df = df[df["Customer(sv)"].isin(cust_names)].reset_index(drop=True)
+
+    return df
+
+
+def preparar_sap_split(df: pd.DataFrame, serial_numbers: list[str] = [''], tool_types: list[str] = ['']) -> pd.DataFrame:
+    first_line = df.iloc[0]
+    new_names = {
+        coluna: valor
+        for coluna, valor in first_line.items()
+        if pd.notna(valor) and valor != ""
+    }
+    df.rename(columns=new_names, inplace=True)
+    df = df.iloc[2:].reset_index(drop=True)
+
+    df = df[
+        (df["(n) Serial Number"].isin(serial_numbers))
+        &
+        (df["Tool Type"].isin(tool_types))
+    ].reset_index(drop=True)
+
     return df
 
 

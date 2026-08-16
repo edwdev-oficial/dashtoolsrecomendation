@@ -171,14 +171,19 @@ def _anos_observados(
         observed += (ano_compra.isna() | ano_compra.le(ano)).astype(int)
     return observed.clip(lower=1)
 
-
 def _percentile_score(series: pd.Series) -> pd.Series:
     numeric = cast(
-        pd.Series, pd.to_numeric(series, errors="coerce")
+        pd.Series,
+        pd.to_numeric(series, errors="coerce")
     ).fillna(0)
+
     if numeric.empty or numeric.nunique(dropna=False) <= 1:
         return pd.Series(0.0, index=series.index)
-    return numeric.rank(method="average", pct=True).fillna(0)
+
+    rank = numeric.rank(method="average")
+    n = len(numeric)
+
+    return ((rank - 1) / (n - 1)).fillna(0)
 
 
 def _is_frota_ativa(row: pd.Series) -> bool:
@@ -217,7 +222,7 @@ def _motivo_principal(row: pd.Series) -> str:
 
     if alta_freq and alto_custo:
         return "Alta frequência e alto custo"
-    if recorrente and alta_freq:
+    if recorrente:
         return "Reparações recorrentes"
     if alto_custo:
         return "Alto custo no período"
@@ -225,6 +230,8 @@ def _motivo_principal(row: pd.Series) -> str:
         return "Alta frequência no período"
     if idade_alta:
         return "Idade elevada"
+    if row.get("Recomendação") == "Troca prioritária":
+        return "Prioridade combinada dos fatores analisados"
     return "Baixo impacto recente"
 
 

@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 
 import pandas as pd
 from PIL import Image, ImageChops
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib import colors
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -21,6 +22,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, Table, TableStyle
 
+from dashtoolsrecomendation.reports import generator_manual
 from dashtoolsrecomendation.reports.config import PdfReportConfig
 from dashtoolsrecomendation.services import renewal_analysis
 
@@ -29,7 +31,7 @@ PAGE_W, PAGE_H = A4
 LANDSCAPE_W, LANDSCAPE_H = landscape(A4)
 MARGIN = 50
 CONTENT_W = PAGE_W - 2 * MARGIN
-PDF_LAYOUT_VERSION = "hilti-brand-2026-07-v6"
+PDF_LAYOUT_VERSION = "hilti-brand-2026-08-v11-generated-methodology-annex"
 
 RED = HexColor("#D2051E")
 DARK = HexColor("#524F53")
@@ -1053,10 +1055,10 @@ class _ReportRenderer:
         self.c.drawString(MARGIN + 270, y - 145, "O que ainda não está medido diretamente")
         missing = (
             "• dias efetivos de indisponibilidade;<br/>"
-            "• produtividade perdida;<br/>"
-            "• custo de equipe parada ou remanejada;<br/>"
-            "• logística e administração do cliente;<br/>"
-            "• impacto de atraso e equipamento substituto."
+            "• perda de produtividade;<br/>"
+            "• custo de equipe para troca no cliente;<br/>"
+            "• csuto logístico para substituição;<br/>"
+            "• impacto de atraso e custo de equipamento substituto."
         )
         self._paragraph(missing, MARGIN + 270, y - 165, 225, 120, size=9, leading=14)
         note = (
@@ -1565,8 +1567,8 @@ class _ReportRenderer:
             leading=15,
         )
         items = [
-            ("1. Disponibilidade", "Mais ocorrências significam maior exposição a períodos em que a ferramenta não está disponível para a equipe."),
-            ("2. Custo de oportunidade", "Quando a atividade depende do equipamento, a parada pode afetar produção, cronograma e utilização da mão de obra."),
+            ("1. Disponibilidade", "Mais ocorrências significam maior exposição a períodos em que a ferramenta não está disponível."),
+            ("2. Custo de oportunidade", "Quando a atividade depende do equipamento, a parada pode afetar produtividade."),
             ("3. Complexidade operacional", "Abertura de chamados, transporte, recebimento, controle de reserva e reprogramação consomem tempo administrativo."),
             ("4. Risco de qualidade e segurança", "A ausência do equipamento correto pode induzir improvisos, troca de método ou uso de ferramenta inadequada."),
         ]
@@ -2681,6 +2683,10 @@ class _ReportRenderer:
             ["Idade de corte", f"{self.config.idade_corte} anos"],
             ["Fator de impostos", _number(self.config.fator_impostos, 2)],
             ["Quantidade no cenário", _number(self.data.cenario["maquinas"])],
+            [
+                "Incluir manual metodológico",
+                "Sim" if self.config.incluir_manual_metodologia else "Não",
+            ],
             ["Incluir base completa", "Sim" if self.config.incluir_base_completa else "Não"],
         ]
         for key, value in self.config.filtros.items():
@@ -2700,6 +2706,459 @@ class _ReportRenderer:
             "Rastreabilidade: os valores deste anexo devem ser preservados junto ao PDF para permitir a reprodução do cenário no Dashboard.",
         )
         self._new_page("Anexo B - Parâmetros utilizados")
+
+    def _methodology_page_header(
+        self,
+        page_number: int,
+        title: str,
+        subtitle: str,
+        *,
+        title_size: float = 23,
+    ) -> float:
+        y = self._header(
+            f"E{page_number:02d}",
+            "Manual de metodologia",
+            "Anexo E",
+            title,
+            title_size=title_size,
+        )
+        used = self._paragraph(
+            subtitle,
+            MARGIN,
+            y,
+            CONTENT_W,
+            55,
+            size=8.5,
+            leading=11,
+            color=MUTED,
+        )
+        return y - used - 18
+
+    def _methodology_heading(self, text: str, y: float) -> float:
+        self.c.setFillColor(RED)
+        self.c.setFont("Helvetica-Bold", 10)
+        self.c.drawString(MARGIN, y, text)
+        return y - 18
+
+    def _methodology_bullets(
+        self,
+        items: Sequence[str],
+        y: float,
+        *,
+        width: float = CONTENT_W,
+        size: float = 8.2,
+    ) -> float:
+        text = "<br/>".join(f"&#8226;&nbsp; {item}" for item in items)
+        used = self._paragraph(
+            text,
+            MARGIN,
+            y,
+            width,
+            500,
+            size=size,
+            leading=size * 1.45,
+        )
+        return y - used - 12
+
+    def _methodology_annex(self) -> None:
+        """Renderiza o manual v2 com a identidade visual do relatório."""
+        footer = "Anexo E - Manual de metodologia do índice de prioridade"
+
+        y = self._methodology_page_header(
+            0,
+            "Índice de Prioridade de Renovação",
+            "Como idade, frequência, custo e recorrência são combinados em uma fila transparente de avaliação técnica e comercial.",
+            title_size=25,
+        )
+        self._callout(
+            MARGIN,
+            y - 90,
+            CONTENT_W,
+            75,
+            "Objetivo do manual: explicar, em linguagem não técnica, de onde vêm os índices apresentados nos estudos de renovação e como interpretar corretamente o resultado.",
+            red=True,
+        )
+        rows = [
+            ["Item", "Definição"],
+            ["Aplicação", "Estudos de renovação de parques de ferramentas"],
+            ["Exemplo didático", "15 máquinas com dados inteiramente fictícios"],
+            ["Princípio", "Priorizar investigação; não prever falha futura"],
+            ["Versão", "Metodologia v2 - posição percentílica normalizada"],
+        ]
+        self._table(rows, [130, 365], MARGIN, y - 125, font_size=8, max_height=180)
+        self._callout(
+            MARGIN,
+            y - 360,
+            CONTENT_W,
+            62,
+            "O índice é uma ferramenta de priorização relativa. A decisão de troca continua dependendo da validação técnica, da aplicação e do impacto operacional.",
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            1,
+            "1. Visão geral",
+            "O que o índice mede e como o resultado deve ser interpretado.",
+        )
+        y = self._methodology_heading("O que o índice mede", y)
+        used = self._paragraph(
+            "O Índice de Prioridade de Renovação organiza as máquinas da maior para a menor necessidade de avaliação. Ele combina quatro sinais observáveis e transforma medidas diferentes em uma única escala comparável.",
+            MARGIN,
+            y,
+            CONTENT_W,
+            60,
+            size=8.5,
+            leading=11,
+        )
+        y -= used + 14
+        rows = [
+            ["Peso", "Dimensão", "Finalidade"],
+            ["25%", "Idade", "Exposição ao envelhecimento e à obsolescência relativa."],
+            ["30%", "Frequência", "Quantidade de reparações ajustada pelo tempo observado."],
+            ["30%", "Custo", "Custo direto acumulado das reparações no período."],
+            ["15%", "Recorrência", "Persistência das ocorrências em anos diferentes."],
+        ]
+        height = self._table(rows, [50, 90, 355], MARGIN, y, font_size=7.4, max_height=160)
+        y -= height + 18
+        y = self._methodology_heading("A leitura correta", y)
+        y = self._methodology_bullets(
+            [
+                "Quanto maior o índice, maior a prioridade relativa dentro do parque analisado.",
+                "O índice não representa probabilidade de falha, vida útil restante ou economia garantida.",
+                "A classificação deve ser confirmada em campo, considerando aplicação, condição física, reserva e criticidade operacional.",
+                "Se o parque ou os filtros mudarem, as posições também podem mudar.",
+            ],
+            y,
+        )
+        self._callout(
+            MARGIN,
+            y - 63,
+            CONTENT_W,
+            55,
+            "Mensagem central: a metodologia evita decisões baseadas somente na idade. O topo do ranking decorre de uma combinação desfavorável dos quatro fatores.",
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            2,
+            "2. Dados e indicadores",
+            "Poucos dados são necessários, desde que estejam associados de forma confiável ao número de série.",
+        )
+        rows = [
+            ["Informação", "Significado", "Uso no índice"],
+            ["Número de série", "Identificador individual da máquina.", "Consolida os registros do ativo."],
+            ["Idade atual", "Tempo desde a aquisição ou entrada em operação.", "Idade - peso de 25%."],
+            ["Reparações", "Total observado na janela escolhida.", "Base para a frequência."],
+            ["Anos observados", "Anos da janela em que a máquina já existia.", "Evita penalizar máquinas recentes."],
+            ["Anos com reparação", "Anos diferentes com ao menos uma ocorrência.", "Base para a recorrência."],
+            ["Custo observado", "Soma dos custos diretos no período.", "Custo - peso de 30%."],
+        ]
+        height = self._table(rows, [105, 215, 175], MARGIN, y, font_size=6.8, max_height=220)
+        y -= height + 20
+        y = self._methodology_heading("Indicadores derivados", y)
+        formulas = [
+            ["Indicador", "Fórmula", "Exemplo"],
+            ["Frequência observada", "Reparações / anos observados", "5 / 3 = 1,67 por ano"],
+            ["Recorrência", "Anos com reparação / anos observados", "2 / 3 = 0,67, ou 67%"],
+        ]
+        height = self._table(formulas, [115, 190, 190], MARGIN, y, font_size=7.4, max_height=120)
+        y -= height + 18
+        self._callout(
+            MARGIN,
+            y - 65,
+            CONTENT_W,
+            58,
+            "Por que ajustar pelo tempo? Duas reparações em um ano indicam intensidade maior do que duas reparações distribuídas em três anos.",
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            3,
+            "3. Posição relativa",
+            "As quatro dimensões são convertidas para uma escala comparável de 0 a 1.",
+        )
+        self._callout(
+            MARGIN,
+            y - 70,
+            CONTENT_W,
+            58,
+            "Posição percentílica = (posição média no ranking - 1) / (quantidade de máquinas - 1)",
+            red=True,
+        )
+        y -= 98
+        used = self._paragraph(
+            "O ranking é crescente: valores maiores recebem posições percentílicas maiores. Em caso de empate, as máquinas recebem a posição média do grupo.",
+            MARGIN,
+            y,
+            CONTENT_W,
+            50,
+            size=8.5,
+            leading=11,
+        )
+        y -= used + 16
+        y = self._methodology_heading("Exemplo de empate", y)
+        rows = [
+            ["Etapa", "Cálculo", "Resultado"],
+            ["Posições ocupadas", "14 e 15", "-"],
+            ["Posição média", "(14 + 15) / 2", "14,5"],
+            ["Posição percentílica", "(14,5 - 1) / (15 - 1)", "0,9643"],
+            ["Leitura", "Posição percentílica x 100", "96,43%"],
+        ]
+        height = self._table(rows, [145, 215, 135], MARGIN, y, font_size=7.5, max_height=160)
+        y -= height + 20
+        y = self._methodology_heading("Como interpretar", y)
+        self._methodology_bullets(
+            [
+                "0,00 representa o menor valor da dimensão, quando não há empate na base.",
+                "1,00 representa o maior valor da dimensão, quando não há empate no topo.",
+                "0,80 indica posição próxima aos 20% mais altos do conjunto.",
+                "A posição é relativa; ela não mede a diferença absoluta entre as máquinas.",
+            ],
+            y,
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            4,
+            "4. Pesos e recomendação",
+            "A soma ponderada converte as posições percentílicas em uma escala de 0 a 100.",
+        )
+        self._callout(
+            MARGIN,
+            y - 72,
+            CONTENT_W,
+            60,
+            "Índice = 100 x [(25% x P idade) + (30% x P frequência) + (30% x P custo) + (15% x P recorrência)]",
+            red=True,
+        )
+        y -= 100
+        rows = [
+            ["Faixa", "Nível", "Orientação"],
+            ["0-29,9", "Baixa prioridade", "Manter ou monitorar conforme idade e histórico."],
+            ["30-49,9", "Monitorar", "Acompanhar a evolução das ocorrências."],
+            ["50-69,9", "Planejar renovação", "Avaliar troca programada e orçamento."],
+            ["70-100", "Troca prioritária", "Exige ao menos duas reparações."],
+        ]
+        height = self._table(rows, [70, 125, 300], MARGIN, y, font_size=7.4, max_height=165)
+        y -= height + 20
+        y = self._methodology_heading("Regras complementares", y)
+        self._methodology_bullets(
+            [
+                "Sem reparação e com menos de 8 anos: <b>Manter</b>.",
+                "Sem reparação e com 8 anos ou mais: <b>Monitorar</b>.",
+                "Índice igual ou superior a 70 exige ao menos duas reparações para <b>Troca prioritária</b>.",
+                "Índice entre 50 e 69,9: <b>Planejar renovação</b>.",
+                "Índice entre 30 e 49,9, ou pelo menos duas reparações: <b>Monitorar</b>.",
+            ],
+            y,
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            5,
+            "5. Exemplo didático",
+            "Base inteiramente fictícia com 15 máquinas e janela máxima de três anos.",
+        )
+        rows = [
+            ["Série", "Modelo", "Idade", "Reparos", "Anos obs.", "Anos c/ reparo", "Custo"],
+            ["900101", "TE-500", "9,8", "5", "3", "3", "R$ 7.200"],
+            ["900102", "TE-500", "9,4", "4", "3", "3", "R$ 6.100"],
+            ["900103", "TE-600", "7,2", "5", "3", "2", "R$ 8.600"],
+            ["900104", "TE-2000", "6,1", "4", "3", "3", "R$ 9.500"],
+            ["900105", "TE-500", "8,5", "2", "3", "2", "R$ 4.800"],
+            ["900106", "TE-800", "7,0", "3", "3", "2", "R$ 5.400"],
+            ["900107", "TE-500", "6,3", "3", "3", "3", "R$ 3.900"],
+            ["900108", "TE-1000", "5,5", "2", "3", "2", "R$ 3.200"],
+            ["900109", "TE-500", "4,2", "4", "3", "2", "R$ 4.500"],
+            ["900110", "TE-500", "3,8", "3", "3", "3", "R$ 3.000"],
+            ["900111", "TE-500", "2,0", "2", "2", "2", "R$ 2.500"],
+            ["900112", "TE-2000", "1,1", "1", "1", "1", "R$ 1.800"],
+            ["900113", "TE-500", "9,0", "0", "3", "0", "R$ 0"],
+            ["900114", "TE-500", "6,8", "1", "3", "1", "R$ 1.400"],
+            ["900115", "TE-600", "4,8", "0", "3", "0", "R$ 0"],
+        ]
+        height = self._table(
+            rows,
+            [60, 72, 48, 52, 64, 92, 107],
+            MARGIN,
+            y,
+            font_size=6.2,
+            row_padding=1.8,
+            max_height=330,
+        )
+        y -= height + 18
+        self._callout(
+            MARGIN,
+            y - 68,
+            CONTENT_W,
+            60,
+            "A série 900104 demonstra por que a idade não decide sozinha: apesar de mais nova que várias TE-500, ela possui o maior custo observado da base.",
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            6,
+            "6. Ranking, recomendação e motivo",
+            "Resultado da aplicação da posição percentílica normalizada às 15 máquinas fictícias.",
+            title_size=21,
+        )
+        rows = [
+            ["Pos.", "Série", "Freq.", "Recorr.", "Custo", "Índice", "Recomendação", "Motivo principal"],
+            ["1", "900101", "1,67", "100%", "R$ 7.200", "91,4", "Troca prioritária", "Alta frequência e alto custo"],
+            ["2", "900102", "1,33", "100%", "R$ 6.100", "82,1", "Troca prioritária", "Alta frequência e alto custo"],
+            ["3", "900103", "1,67", "67%", "R$ 8.600", "80,0", "Troca prioritária", "Alta frequência e alto custo"],
+            ["4", "900104", "1,33", "100%", "R$ 9.500", "76,1", "Troca prioritária", "Alta frequência e alto custo"],
+            ["5", "900106", "1,00", "67%", "R$ 5.400", "57,9", "Planejar renovação", "Baixo impacto recente"],
+            ["6", "900107", "1,00", "100%", "R$ 3.900", "54,3", "Planejar renovação", "Reparações recorrentes"],
+            ["7", "900105", "0,67", "67%", "R$ 4.800", "51,8", "Planejar renovação", "Idade elevada"],
+            ["8", "900109", "1,33", "67%", "R$ 4.500", "51,4", "Planejar renovação", "Alta frequência no período"],
+            ["9", "900110", "1,00", "100%", "R$ 3.000", "41,1", "Monitorar", "Reparações recorrentes"],
+            ["10", "900111", "1,00", "100%", "R$ 2.500", "37,1", "Monitorar", "Reparações recorrentes"],
+            ["11", "900108", "0,67", "67%", "R$ 3.200", "34,6", "Monitorar", "Baixo impacto recente"],
+            ["12", "900112", "1,00", "100%", "R$ 1.800", "33,2", "Monitorar", "Reparações recorrentes"],
+            ["13", "900114", "0,33", "33%", "R$ 1.400", "25,0", "Manter", "Baixo impacto recente"],
+            ["14", "900113", "0,00", "0%", "R$ 0", "24,1", "Monitorar", "Idade elevada"],
+            ["15", "900115", "0,00", "0%", "R$ 0", "9,8", "Manter", "Baixo impacto recente"],
+        ]
+        height = self._table(
+            rows,
+            [25, 45, 35, 40, 55, 35, 105, 155],
+            MARGIN,
+            y,
+            font_size=5.2,
+            row_padding=1.2,
+            max_height=350,
+        )
+        y -= height + 16
+        self._callout(
+            MARGIN,
+            y - 66,
+            CONTENT_W,
+            58,
+            "Resultado: quatro máquinas em troca prioritária, quatro em renovação planejada, cinco para monitoramento e duas para manutenção do cenário atual.",
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            7,
+            "7. Exemplo completo: série 900101",
+            "A primeira colocada apresenta desempenho desfavorável nas quatro dimensões.",
+            title_size=21,
+        )
+        details = [
+            ["Dado", "Valor", "Interpretação"],
+            ["Idade atual", "9,8 anos", "Maior idade da base fictícia."],
+            ["Reparações", "5", "Ocorrências distribuídas na janela."],
+            ["Anos observados", "3", "Presente em toda a janela."],
+            ["Frequência", "5 / 3 = 1,67", "Empatada com a maior frequência."],
+            ["Recorrência", "3 / 3 = 100%", "Reparação em todos os anos."],
+            ["Custo observado", "R$ 7.200", "Terceiro maior custo da base."],
+        ]
+        height = self._table(details, [110, 120, 265], MARGIN, y, font_size=7.2, max_height=190)
+        y -= height + 20
+        y = self._methodology_heading("Posições percentílicas e pontos", y)
+        scores = [
+            ["Dimensão", "Posição percentílica", "Peso", "Pontos"],
+            ["Idade", "(15 - 1) / (15 - 1) = 1,0000", "25%", "25,0"],
+            ["Frequência", "(14,5 - 1) / (15 - 1) = 0,9643", "30%", "28,9"],
+            ["Custo", "(13 - 1) / (15 - 1) = 0,8571", "30%", "25,7"],
+            ["Recorrência", "(12 - 1) / (15 - 1) = 0,7857", "15%", "11,8"],
+        ]
+        height = self._table(scores, [95, 255, 65, 80], MARGIN, y, font_size=7.1, max_height=150)
+        y -= height + 20
+        self._callout(
+            MARGIN,
+            y - 64,
+            CONTENT_W,
+            56,
+            "Índice = 25,0 + 28,9 + 25,7 + 11,8 = 91,4. Classificação: Troca prioritária.",
+            red=True,
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            8,
+            "8. Exemplos de interpretação",
+            "Máquinas com históricos diferentes podem chegar a recomendações diferentes.",
+        )
+        examples = [
+            (
+                "900104 · TE-2000 · índice 76,1 · Troca prioritária",
+                "Idade de 6,1 anos, maior custo do conjunto, frequência de 1,33 e recorrência de 100%.",
+            ),
+            (
+                "900109 · TE-500 · índice 51,4 · Planejar renovação",
+                "Idade de 4,2 anos, quatro reparações e custo intermediário justificam planejamento, sem troca automática.",
+            ),
+            (
+                "900113 · TE-500 · índice 24,1 · Monitorar",
+                "Idade de 9 anos, nenhuma reparação e custo zero. A idade sustenta o acompanhamento, mas não a troca.",
+            ),
+            (
+                "900115 · TE-600 · índice 9,8 · Manter",
+                "Idade de 4,8 anos, nenhuma reparação e custo zero. Sem ocorrência recente e abaixo de 8 anos, permanece no cenário atual.",
+            ),
+        ]
+        for title, description in examples:
+            self.c.setFillColor(LIGHT)
+            self.c.roundRect(MARGIN, y - 78, CONTENT_W, 68, 7, fill=1, stroke=0)
+            self._paragraph(title, MARGIN + 14, y - 22, CONTENT_W - 28, 20, font="Helvetica-Bold", size=8.2, leading=10)
+            self._paragraph(description, MARGIN + 14, y - 43, CONTENT_W - 28, 30, size=7.7, leading=9.5)
+            y -= 82
+        y = self._methodology_heading("O que os exemplos demonstram", y - 2)
+        self._methodology_bullets(
+            [
+                "Idade elevada não gera troca automática sem ocorrência observada.",
+                "Custo e frequência podem elevar a prioridade de máquinas mais novas.",
+                "Baixo índice, ausência de reparações e idade inferior a 8 anos sustentam <b>Manter</b>.",
+            ],
+            y,
+            size=7.8,
+        )
+        self._new_page(footer)
+
+        y = self._methodology_page_header(
+            9,
+            "9. Uso responsável",
+            "O ranking é um ponto de partida para uma renovação seletiva e tecnicamente validada.",
+        )
+        y = self._methodology_heading("O índice deve apoiar", y)
+        y = self._methodology_bullets(
+            [
+                "A seleção da primeira fila de inspeção técnica e comercial.",
+                "A formação de ondas de renovação compatíveis com orçamento e criticidade.",
+                "A comparação transparente entre máquinas do mesmo parque e período.",
+                "A discussão sobre custo total, disponibilidade e risco operacional.",
+            ],
+            y,
+        )
+        y = self._methodology_heading("O índice não substitui", y)
+        y = self._methodology_bullets(
+            [
+                "Inspeção da condição física e teste de aplicação.",
+                "Medição de dias indisponíveis, produtividade e custo de oportunidade.",
+                "Avaliação de segurança, ergonomia, peças, acessórios e compatibilidade tecnológica.",
+                "Análise financeira entre compra, locação ou Gestão de Frotas.",
+            ],
+            y,
+        )
+        self._callout(
+            MARGIN,
+            y - 72,
+            CONTENT_W,
+            64,
+            "Limitação estatística: as posições percentílicas expressam posição relativa, não magnitude absoluta. Os pesos apoiam a decisão; não foram estimados por um modelo preditivo de falha.",
+        )
+        checklist = [
+            ["Etapa", "Verificação antes de aprovar a troca"],
+            ["1", "Confirmar número de série e aplicação."],
+            ["2", "Validar registros de reparação e custo."],
+            ["3", "Verificar condição física, reserva e criticidade."],
+            ["4", "Comparar o custo de manter com as alternativas."],
+            ["5", "Definir indicadores para acompanhar a primeira onda."],
+        ]
+        self._table(checklist, [55, 440], MARGIN, y - 95, font_size=7.2, max_height=160)
+        self._new_page(footer)
 
     def _annex_rows(self, frame: pd.DataFrame) -> list[list[str]]:
         rows: list[list[str]] = []
@@ -2820,6 +3279,21 @@ class _ReportRenderer:
             self._new_page(f"Anexo {code} - {title}")
 
 
+def gerar_manual_metodologia_pdf(*, config: PdfReportConfig) -> bytes:
+    """Gera em memória o manual v2 usado como Anexo E do relatório."""
+    config.validate()
+    return generator_manual.generate_manual_bytes()
+
+
+def _append_pdf(base_pdf: bytes, annex_pdf: bytes) -> bytes:
+    writer = PdfWriter()
+    writer.append(PdfReader(BytesIO(base_pdf)))
+    writer.append(PdfReader(BytesIO(annex_pdf)))
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
 def gerar_relatorio_pdf(
     *,
     base: pd.DataFrame,
@@ -2860,4 +3334,8 @@ def gerar_relatorio_pdf(
     output = BytesIO()
     renderer = _ReportRenderer(output, data, config)
     renderer.build()
-    return output.getvalue()
+    report = output.getvalue()
+    if config.incluir_manual_metodologia:
+        manual = gerar_manual_metodologia_pdf(config=config)
+        return _append_pdf(report, manual)
+    return report

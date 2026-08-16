@@ -185,6 +185,7 @@ def show() -> None:
         return
 
     df_dashboard = prepare_df()
+
     df_ams = st.session_state.get("df_ams", pd.DataFrame())
     
     anos = _anos_disponiveis(df_ams)
@@ -242,6 +243,37 @@ def show() -> None:
         df_ams,
         anos_selecionados,
     )
+
+    df_dashboard_filtrado = df_dashboard.copy()
+    serie = st.text_input(
+        "Número de série para análise individual",)
+    st.write(serie)
+    if serie:
+        df_dashboard_filtrado = df_dashboard_filtrado[
+            (df_dashboard_filtrado['Número de série'] == serie)
+            |
+            (df_dashboard_filtrado['Número de Série'] == serie)
+        ]
+        st.dataframe(df_dashboard_filtrado, hide_index=True, width="stretch")
+
+    st.subheader("Dashboard de análise de reparações", divider="red")
+    df_com_periodo_filtrado = df_com_periodo.copy()
+    serie = st.text_input(
+        "Número de série para análise individual2",)
+    if serie:
+        df_com_periodo_filtrado = df_com_periodo_filtrado[
+            (df_com_periodo_filtrado['Número de série'] == serie)
+            |
+            (df_com_periodo_filtrado['Número de Série'] == serie)
+        ]
+        st.dataframe(df_com_periodo_filtrado, hide_index=True, width="stretch")
+        df_check = df_com_periodo_filtrado[['Reparos_no_período']]
+        st.dataframe(df_check, hide_index=True, width="stretch")
+        # st.dataframe(df_com_periodo_filtrado[['Reparos_no_período']], hide_index=True, width="stretch")
+        st.write('Reparos_no_período' in df_com_periodo_filtrado.columns)
+
+    st.divider()
+
     df_com_periodo["Quantidade de reparos"] = df_com_periodo["Reparos_no_período"]
     df_com_periodo["# Reparos"] = df_com_periodo["Reparos_no_período"]
     df_com_periodo["Custo de Reparos"] = df_com_periodo["Custo_no_período"]
@@ -253,10 +285,13 @@ def show() -> None:
         .map(lambda repaired: "Sim" if bool(repaired) else "Não")
     )
 
+    
     df_filtrado, _ = dashboard_filters.aplicar_filtros(df_com_periodo)
+
     if df_filtrado.empty:
         st.info("Nenhuma máquina foi encontrada para os filtros selecionados.")
         return
+
 
     base = renewal_analysis.preparar_base_maquinas(
         df_filtrado,
@@ -265,19 +300,30 @@ def show() -> None:
         data_corte=data_corte,
         tax_factor=fator_impostos,
     )
+
+    # st.subheader('DF BASE', divider='red')
+    # st.dataframe(df_filtrado)
+    # st.write('Índice de prioridade' in df_filtrado.columns)
+    # st.dataframe(base)
+
+
     if base.empty:
         st.info("Não há números de série válidos no parque filtrado.")
         return
 
+
     st.session_state['base'] = base
 
     resumo = renewal_analysis.resumo_executivo(base)
+
     _render_cards_resumo(resumo)
 
     ano_inicial = min(anos_selecionados)
     ano_final = max(anos_selecionados)
     parcial = ano_final == pd.Timestamp(data_corte).year
     complemento_periodo = f" até {formatters.date_br(data_corte)}" if parcial else ""
+
+
     st.markdown(
         f"""
         <div class="method-note">
@@ -293,37 +339,105 @@ def show() -> None:
         unsafe_allow_html=True,
     )
 
-    tab_resumo, tab_modelos, tab_renovacao, tab_qualidade, tab_dados, tab_pdf = st.tabs(
-        [
-            "Resumo executivo",
-            "Modelos e custos",
-            "Plano de renovação",
-            "Qualidade dos dados",
-            "Base filtrada",
-            "Relatório PDF",
-        ]
-    )
+
+    role = st.session_state.get("authenticated_role")
+    
+    tab_names = [
+        "Resumo executivo",
+        "Modelos e custos",
+        "Plano de renovação",
+        "Base filtrada",
+        "Relatório PDF",
+    ]
+    if role == "adm":
+        tab_qualidade, *tabs = st.tabs(["Qualidade dos dados", *tab_names])
+    else:
+        tab_qualidade = None
+        tabs = st.tabs(tab_names)
+
+    tab_resumo, tab_modelos, tab_renovacao, tab_dados, tab_pdf = tabs
+
+    if tab_qualidade is not None:
+        with tab_qualidade:
+            reconciliation, reconciliation_summary = (
+                renewal_analysis.reconciliar_fontes(
+                    df_com_periodo,
+                    df_ams,
+                    anos_selecionados,
+                )
+            )
+            _render_small_cards(
+                [
+                    (
+                        "PARQUE ATUAL",
+                        _numero(reconciliation_summary["parque_atual"]),
+                        "Registros presentes na fonte do parque",
+                    ),
+                    (
+                        "PRESENTES NAS DUAS",
+                        _numero(reconciliation_summary["presentes_duas"]),
+                        "Conciliação por número de série",
+                    ),
+                    (
+                        "SOMENTE NO PARQUE",
+                        _numero(reconciliation_summary["somente_parque"]),
+                        "Sem registro AMS na janela selecionada",
+                    ),
+                    (
+                        "SOMENTE NO AMS",
+                        _numero(reconciliation_summary["somente_ams"]),
+                        "Possível diferença de atualização ou saída do parque",
+                    ),
+                ]
+            )
+            st.caption(
+                "Registros somente no parque não significam ausência de manutenção em toda "
+                "a vida da máquina; significam apenas ausência no AMS dentro da janela selecionada."
+            )
+            status_options = (
+                reconciliation["Status de conciliação"].unique().tolist()
+            )
+            selected_status = st.multiselect(
+                "Status de conciliação",
+                options=status_options,
+                default=status_options,
+            )
+            reconciliation_view = reconciliation[
+                reconciliation["Status de conciliação"].isin(selected_status)
+            ]
+            st.dataframe(
+                reconciliation_view,
+                hide_index=True,
+                width="stretch",
+            )
 
     with tab_resumo:
-
-        idade_maxima = max(1, _as_int(base["Idade atual"].max()))
-        idade_corte = st.number_input(
-            "Idade de corte para comparação",
-            min_value=0,
-            max_value=idade_maxima,
-            value=min(5, idade_maxima),
-            step=1,
-            help=(
-                "Compara frequência e custo por máquina, evitando usar apenas "
-                "totais de faixas com tamanhos diferentes."
-            ),
-            key="idade_corte_resumo",
-        )
+        idade_maxima = max(0, _as_int(base["Idade atual"].fillna(0).max()))
+        idade_corte_key = "idade_corte_reparacoes"
+        if idade_corte_key not in st.session_state:
+            st.session_state[idade_corte_key] = min(5, idade_maxima)
+        else:
+            st.session_state[idade_corte_key] = min(
+                max(0, int(st.session_state[idade_corte_key])),
+                idade_maxima,
+            )
+        idade_corte = int(st.session_state[idade_corte_key])
         faixas = renewal_analysis.analise_faixas_idade(base, idade_corte)
         antigas = _as_int(base["Idade atual"].gt(idade_corte).sum())
         pct_antigas = antigas / len(base) if len(base) else 0
-        top_20 = min(20, len(base))
+        top_20 = min(100, len(base))
         _, cenario_top = renewal_analysis.cenario_renovacao(base, top_20)
+        custo_troca_prioritaria = _as_float(
+            base.loc[
+                base["Recomendação"].eq("Troca prioritária"),
+                "Custo com impostos",
+            ].sum()
+        )
+        percentual_custo_troca_prioritaria = (
+            custo_troca_prioritaria / resumo["custo"]
+            if resumo["custo"]
+            else 0
+        )
 
         _render_small_cards(
             [
@@ -337,10 +451,15 @@ def show() -> None:
                     _numero(resumo["troca_prioritaria"]),
                     "Classificação relativa ao conjunto filtrado",
                 ),
+                # (
+                #     f"CUSTO CONCENTRADO NO TOP {top_20}",
+                #     _percentual(cenario_top["percentual_custo"]),
+                #     "Participação no custo observado",
+                # ),
                 (
-                    f"CUSTO CONCENTRADO NO TOP {top_20}",
-                    _percentual(cenario_top["percentual_custo"]),
-                    "Participação no custo observado, não economia projetada",
+                    "CUSTO CONCENTRADO NA TROCA PRIORITÁRIA",
+                    _percentual(percentual_custo_troca_prioritaria),
+                    "Participação no custo observado",
                 ),
             ]
         )
@@ -373,22 +492,7 @@ def show() -> None:
 
             if st.session_state['config']['relacaoReparosIdade']:
                 with st.container(key="container-graph-faixas"):
-                    pass
-                    idade_maxima = max(
-                        0, _as_int(idade['idade_int (a)'].max())
-                    )
-                    idade_maxima = max(0, 10)
-                    idade_corte_key = "idade_corte_reparacoes"
-
-                    if idade_corte_key not in st.session_state:
-                        st.session_state[idade_corte_key] = min(5, idade_maxima)
-                    else:
-                        st.session_state[idade_corte_key] = min(
-                            max(0, int(st.session_state[idade_corte_key])),
-                            idade_maxima,
-                        )
-
-                    idade_corte = st.number_input(
+                    st.number_input(
                         "Idade de corte das máquinas",
                         min_value=0,
                         max_value=idade_maxima,
@@ -420,42 +524,42 @@ def show() -> None:
                 width="stretch",
             )
 
-            with right:
-                st.plotly_chart(
-                    dashboard_charts.grafico_matriz_prioridade(base),
-                    width="stretch",
-                )
+        with right:
+            st.plotly_chart(
+                dashboard_charts.grafico_matriz_prioridade(base),
+                width="stretch",
+            )
 
-                if st.session_state['config']['relacaoReparosIdade']:
+            if st.session_state['config']['relacaoReparosIdade']:
 
-                    with st.container(key="container-graph-faixas-maquinas"):
-                        # Compensa o espaço ocupado pelo seletor no container
-                        # equivalente da coluna esquerda, mantendo os cards e
-                        # os gráficos alinhados verticalmente.
-                        st.space(68)
+                with st.container(key="container-graph-faixas-maquinas"):
+                    # Compensa o espaço ocupado pelo seletor no container
+                    # equivalente da coluna esquerda, mantendo os cards e
+                    # os gráficos alinhados verticalmente.
+                    st.space(68)
 
-                        grafico_maquinas, grafico_percentual_maquinas = st.columns(2)
+                    grafico_maquinas, grafico_percentual_maquinas = st.columns(2)
 
-                        with grafico_maquinas:
-                            st.plotly_chart(
-                                dashboard_charts.grafico_maquinas_por_faixa_idade(
-                                    faixas
-                                ),
-                                width="stretch",
-                            )
+                    with grafico_maquinas:
+                        st.plotly_chart(
+                            dashboard_charts.grafico_maquinas_por_faixa_idade(
+                                faixas
+                            ),
+                            width="stretch",
+                        )
 
-                        with grafico_percentual_maquinas:
-                            st.plotly_chart(
-                                dashboard_charts.grafico_percentual_maquinas_por_faixa_idade(
-                                    faixas
-                                ),
-                                width="stretch",
-                            )
+                    with grafico_percentual_maquinas:
+                        st.plotly_chart(
+                            dashboard_charts.grafico_percentual_maquinas_por_faixa_idade(
+                                faixas
+                            ),
+                            width="stretch",
+                        )
 
-                st.plotly_chart(
-                    dashboard_charts.grafico_custo_por_maquina_faixa(faixas),
-                    width="stretch",
-                )
+            st.plotly_chart(
+                dashboard_charts.grafico_custo_por_maquina_faixa(faixas),
+                width="stretch",
+            )
 
         _render_ranking(base, None)
 
@@ -540,11 +644,16 @@ def show() -> None:
 
     with tab_renovacao:
         max_machines = len(base)
-        # A nova chave aplica o critério atualizado também a sessões que ainda
-        # conservavam o valor padrão anterior, baseado na idade de corte.
+        # Preserva ajustes manuais enquanto os filtros não alterarem a
+        # quantidade padrão de máquinas classificadas como troca prioritária.
         scenario_quantity_key = "quantidade_cenario_renovacao_prioritaria"
+        scenario_default_key = "quantidade_padrao_cenario_prioritaria"
         default_quantity = renewal_analysis.quantidade_padrao_cenario(base)
-        if scenario_quantity_key not in st.session_state:
+        previous_default = st.session_state.get(scenario_default_key)
+        if previous_default != default_quantity:
+            st.session_state[scenario_quantity_key] = default_quantity
+            st.session_state[scenario_default_key] = default_quantity
+        elif scenario_quantity_key not in st.session_state:
             st.session_state[scenario_quantity_key] = default_quantity
         else:
             st.session_state[scenario_quantity_key] = min(
@@ -643,51 +752,6 @@ def show() -> None:
                 substitui avaliação de aplicação, produtividade ou condição física.
                 """
             )
-
-    with tab_qualidade:
-        reconciliation, reconciliation_summary = renewal_analysis.reconciliar_fontes(
-            df_com_periodo,
-            df_ams,
-            anos_selecionados,
-        )
-        _render_small_cards(
-            [
-                (
-                    "PARQUE ATUAL",
-                    _numero(reconciliation_summary["parque_atual"]),
-                    "Registros presentes na fonte do parque",
-                ),
-                (
-                    "PRESENTES NAS DUAS",
-                    _numero(reconciliation_summary["presentes_duas"]),
-                    "Conciliação por número de série",
-                ),
-                (
-                    "SOMENTE NO PARQUE",
-                    _numero(reconciliation_summary["somente_parque"]),
-                    "Sem registro AMS na janela selecionada",
-                ),
-                (
-                    "SOMENTE NO AMS",
-                    _numero(reconciliation_summary["somente_ams"]),
-                    "Possível diferença de atualização ou saída do parque",
-                ),
-            ]
-        )
-        st.caption(
-            "Registros somente no parque não significam ausência de manutenção em toda "
-            "a vida da máquina; significam apenas ausência no AMS dentro da janela selecionada."
-        )
-        status_options = reconciliation["Status de conciliação"].unique().tolist()
-        selected_status = st.multiselect(
-            "Status de conciliação",
-            options=status_options,
-            default=status_options,
-        )
-        reconciliation_view = reconciliation[
-            reconciliation["Status de conciliação"].isin(selected_status)
-        ]
-        st.dataframe(reconciliation_view, hide_index=True, width="stretch")
 
     with tab_dados:
         display = base.copy()
@@ -806,7 +870,7 @@ def show() -> None:
                     accept_multiple_files=False,
                 )
 
-            col_cenario, col_idade, col_base = st.columns(3)
+            col_cenario, col_idade, col_manual, col_base = st.columns(4)
             with col_cenario:
                 quantidade_pdf = st.number_input(
                     "Máquinas no cenário",
@@ -822,6 +886,15 @@ def show() -> None:
                     max_value=idade_maxima_relatorio,
                     value=idade_corte_relatorio,
                     step=1,
+                )
+            with col_manual:
+                incluir_manual_metodologia = st.checkbox(
+                    "Incluir manual metodológico",
+                    value=False,
+                    help=(
+                        "Inclui o Manual de Metodologia do Índice de "
+                        "Prioridade de Renovação v2 como Anexo E."
+                    ),
                 )
             with col_base:
                 incluir_base_completa = st.checkbox(
@@ -862,6 +935,7 @@ def show() -> None:
                 fator_impostos=float(fator_impostos),
                 quantidade_cenario=int(quantidade_pdf),
                 incluir_base_completa=bool(incluir_base_completa),
+                incluir_manual_metodologia=bool(incluir_manual_metodologia),
                 logo_cliente=logo_cliente.getvalue() if logo_cliente else None,
                 filtros=filtros_relatorio,
             )

@@ -5,6 +5,30 @@ import pandas as pd
 from dashtoolsrecomendation.components import dashboard_charts
 
 
+def test_matriz_prioridade_exibe_modelo_no_titulo_e_serie_na_primeira_linha() -> None:
+    base = pd.DataFrame(
+        {
+            "Número de Série": ["1856009"],
+            "Modelo": ["TE-700"],
+            "Idade atual": [6.8],
+            "Reparações no período": [12],
+            "Custo com impostos": [10_624.08],
+            "Índice de prioridade": [96.6],
+            "Recomendação": ["Troca prioritária"],
+            "Motivo principal": ["Alta frequência e alto custo"],
+        }
+    )
+
+    figure = dashboard_charts.grafico_matriz_prioridade(base)
+    trace = figure.data[0]
+
+    assert list(trace.hovertext) == ["TE-700"]
+    assert trace.customdata[0][0] == "1856009"
+    assert trace.hovertemplate.startswith(
+        "<b>%{hovertext}</b><br>Nº de série: %{customdata[0]}"
+    )
+
+
 def test_custo_anual_exibe_rotulos_inteiros_acima_das_barras() -> None:
     annual = pd.DataFrame(
         {

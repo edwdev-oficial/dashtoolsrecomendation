@@ -31,6 +31,121 @@ class RenewalAnalysisTests(unittest.TestCase):
             }
         )
 
+    def test_percentil_normaliza_valores_distintos_entre_zero_e_um(self):
+        values = pd.Series([10, 20, 30], index=["a", "b", "c"])
+
+        result = renewal_analysis._percentile_score(values)
+
+        expected = pd.Series([0.0, 0.5, 1.0], index=values.index)
+        pd.testing.assert_series_equal(result, expected)
+
+    def test_percentil_usa_posicao_media_em_empates(self):
+        cases = [
+            ([0, 0, 10], [0.25, 0.25, 1.0]),
+            ([0, 10, 10], [0.0, 0.75, 0.75]),
+        ]
+
+        for values, expected_values in cases:
+            with self.subTest(values=values):
+                result = renewal_analysis._percentile_score(pd.Series(values))
+                expected = pd.Series(expected_values)
+                pd.testing.assert_series_equal(result, expected)
+
+    def test_percentil_retorna_zero_quando_nao_existe_variacao(self):
+        cases = [
+            pd.Series(dtype="float64"),
+            pd.Series([5]),
+            pd.Series([5, 5, 5]),
+        ]
+
+        for values in cases:
+            with self.subTest(values=values.tolist()):
+                result = renewal_analysis._percentile_score(values)
+                expected = pd.Series(0.0, index=values.index)
+                pd.testing.assert_series_equal(result, expected)
+
+    def test_indice_e_recomendacao_seguem_metodologia_normalizada(self):
+        parque = pd.DataFrame(
+            {
+                "Número de Série": ["A", "B", "C"],
+                "Modelo": ["M1", "M2", "M3"],
+                "Grupo": ["Comprado"] * 3,
+                "Status da Ferramenta": ["Ativo"] * 3,
+                "Data de compra": ["2016-01-01", "2021-01-01", "2025-01-01"],
+                "idade_int (a)": [10, 5, 1],
+            }
+        )
+        ams = pd.DataFrame(
+            {
+                "Número de Série": ["A", "B"],
+                "ano_reparo": [2026, 2026],
+                "Modelo": ["M1", "M2"],
+                "# Reparos": [3, 2],
+                "# Notif.": [3, 2],
+                "Custo de Reparos": [300.0, 200.0],
+                "Pagado pelo Cliente": [300.0, 200.0],
+                "Economia": [0.0, 0.0],
+            }
+        )
+
+        base = renewal_analysis.preparar_base_maquinas(
+            parque,
+            ams,
+            [2026],
+            data_corte=pd.Timestamp("2026-12-31"),
+            tax_factor=1,
+        ).set_index("Número de Série")
+
+        pd.testing.assert_frame_equal(
+            base.loc[
+                ["A", "B", "C"],
+                [
+                    "Percentil idade",
+                    "Percentil frequência",
+                    "Percentil custo",
+                    "Percentil recorrência",
+                ],
+            ],
+            pd.DataFrame(
+                {
+                    "Percentil idade": [1.0, 0.5, 0.0],
+                    "Percentil frequência": [1.0, 0.5, 0.0],
+                    "Percentil custo": [1.0, 0.5, 0.0],
+                    "Percentil recorrência": [0.75, 0.75, 0.0],
+                },
+                index=pd.Index(["A", "B", "C"], name="Número de Série"),
+            ),
+            check_dtype=False,
+            check_index_type=False,
+        )
+        self.assertEqual(
+            base["Índice de prioridade"].to_dict(),
+            {"A": 96.3, "B": 53.8, "C": 0.0},
+        )
+        self.assertEqual(
+            base["Recomendação"].to_dict(),
+            {
+                "A": "Troca prioritária",
+                "B": "Planejar renovação",
+                "C": "Manter",
+            },
+        )
+
+    def test_indice_25_com_uma_reparacao_permanece_manter(self):
+        maquina = pd.Series(
+            {
+                "Grupo": "Comprado",
+                "Status da Ferramenta": "Ativo",
+                "Reparações no período": 1,
+                "Índice de prioridade": 25.0,
+                "Idade atual": 6.8,
+            }
+        )
+
+        recomendacao = renewal_analysis._classificar_prioridade(maquina)
+
+        self.assertEqual(recomendacao, "Manter")
+
     def test_resumo_usa_todo_o_parque_como_denominador(self):
         base = renewal_analysis.preparar_base_maquinas(
             self.parque,
@@ -67,6 +182,43 @@ class RenewalAnalysisTests(unittest.TestCase):
         self.assertGreaterEqual(maquina["Reparações no período"], 2)
         self.assertEqual(maquina["Recomendação"], "Manter")
         self.assertEqual(maquina["Motivo principal"], "Gestão de Frotas")
+
+    def test_troca_prioritaria_sem_gatilho_isolado_usa_motivo_combinado(self):
+        maquina = pd.Series(
+            {
+                "Grupo": "Comprado",
+                "Status da Ferramenta": "Ativo",
+                "Recomendação": "Troca prioritária",
+                "Percentil frequência": 0.74,
+                "Percentil custo": 0.74,
+                "Idade atual": 7.9,
+                "Recorrência": 0.66,
+            }
+        )
+
+        motivo = renewal_analysis._motivo_principal(maquina)
+
+        self.assertEqual(
+            motivo,
+            "Prioridade combinada dos fatores analisados",
+        )
+
+    def test_recorrencia_relevante_e_motivo_mesmo_sem_alta_frequencia(self):
+        maquina = pd.Series(
+            {
+                "Grupo": "Comprado",
+                "Status da Ferramenta": "Ativo",
+                "Recomendação": "Monitorar",
+                "Percentil frequência": 0.50,
+                "Percentil custo": 0.50,
+                "Idade atual": 5,
+                "Recorrência": 0.67,
+            }
+        )
+
+        motivo = renewal_analysis._motivo_principal(maquina)
+
+        self.assertEqual(motivo, "Reparações recorrentes")
 
     def test_modelos_usam_maquinas_do_parque(self):
         base = renewal_analysis.preparar_base_maquinas(
