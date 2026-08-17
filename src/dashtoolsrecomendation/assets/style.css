@@ -58,6 +58,38 @@
     stroke: currentColor !important;
 }
 
+/*
+ * Cabeçalhos dos expanders explicativos. As chaves limitam o estilo a esses
+ * componentes e evitam interferência nos expanders da sidebar.
+ */
+div.st-key-expander_interpretacao_matriz details > summary,
+div.st-key-expander_como_indice_eh_calculado details > summary {
+    background-color: var(--COLOR_DARK) !important;
+    color: var(--COLOR_WHITE) !important;
+    transition:
+        background-color 160ms ease,
+        box-shadow 160ms ease;
+}
+
+div.st-key-expander_interpretacao_matriz details > summary:hover,
+div.st-key-expander_como_indice_eh_calculado details > summary:hover {
+    background-color: #625e63 !important;
+}
+
+div.st-key-expander_interpretacao_matriz details > summary:focus-visible,
+div.st-key-expander_como_indice_eh_calculado details > summary:focus-visible {
+    outline: 2px solid var(--COLOR_WHITE) !important;
+    outline-offset: -3px;
+}
+
+div.st-key-expander_interpretacao_matriz details > summary p,
+div.st-key-expander_interpretacao_matriz details > summary svg,
+div.st-key-expander_como_indice_eh_calculado details > summary p,
+div.st-key-expander_como_indice_eh_calculado details > summary svg {
+    color: var(--COLOR_WHITE) !important;
+    fill: currentColor !important;
+}
+
 .block-container {
     padding-top: 4rem;
     padding-bottom: 1.5rem;
@@ -271,6 +303,7 @@ div.st-key-container-graph,
 div.st-key-container-graph-faixas,
 div.st-key-container-graph-faixas-maquinas,
 div.st-key-container-graph-maquinas-idade,
+div.st-key-container-graph-custo_por_idade,
 div.st-key-container-graph-modelos-normalizados,
 div.st-key-container-ranking-modelos,
 div.st-key-container-graph-modelos-lateral {
@@ -287,6 +320,7 @@ div.st-key-container-graph div[data-testid="stElementContainer"]:has(div[data-te
 div.st-key-container-graph-faixas div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
 div.st-key-container-graph-faixas-maquinas div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
 div.st-key-container-graph-maquinas-idade div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
+div.st-key-container-graph-custo_por_idade div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
 div.st-key-container-graph-modelos-normalizados div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),
 div.st-key-container-graph-modelos-lateral div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]) {
     background: transparent !important;
@@ -313,6 +347,16 @@ div.st-key-container-graph-modelos-lateral div[data-testid="stElementContainer"]
 [data-testid="stMainBlockContainer"] [data-testid="stTooltipIcon"] svg {
     color: var(--COLOR_WHITE) !important;
     fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
+/*
+ * O ícone de ajuda é desenhado por contornos. Forçar o preenchimento do SVG
+ * com a mesma cor do texto encobre o "?" e deixa apenas um círculo sólido.
+ * A regra se limita ao estado sem hover para preservar a interação nativa.
+ */
+[data-testid="stTooltipIcon"]:not(:hover) svg.icon {
+    fill: none !important;
     stroke: currentColor !important;
 }
 

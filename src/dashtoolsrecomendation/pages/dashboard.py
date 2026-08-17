@@ -120,10 +120,44 @@ def _analytical_table(base: pd.DataFrame, limit: int | None = None) -> pd.DataFr
     return result
 
 
+def _analytical_table_adm(
+    base: pd.DataFrame, limit: int | None = None
+) -> pd.DataFrame:
+    columns = [
+        "Número de Série",
+        "Modelo",
+        "Grupo",
+        "Data de compra",
+        "Idade atual",
+        "Percentil idade",
+        "Reparações no período",
+        "Anos observados",
+        "Reparações por ano observado",
+        "Percentil frequência",
+        "Anos com reparação",
+        "Primeiro ano com reparação",
+        "Último ano com reparação",
+        "Recorrência",
+        "Percentil recorrência",
+        "Custo com impostos",
+        "Percentil custo",
+        "Índice de prioridade",
+        "Recomendação",
+        "Motivo principal",
+    ]
+    selected_columns = [
+        column for column in columns if column in base.columns
+    ]
+    result = cast(pd.DataFrame, base[selected_columns]).copy()
+    if limit is not None:
+        result = result.head(limit)
+    return result
+
+
 def _render_ranking(
     base: pd.DataFrame, limit: int | None = 12
 ) -> None:
-    st.markdown("#### Máquinas com maior prioridade analítica")
+    st.markdown("#### Relação de máquinas com seus índices de prioridade")
     st.dataframe(
         _analytical_table(base, limit),
         hide_index=True,
@@ -151,6 +185,55 @@ def _render_ranking(
         '''
     )
     download_xlsx.download(df=_analytical_table(base, None), key='ranking')
+
+
+def _render_ranking_adm(
+    base: pd.DataFrame, limit: int | None = 12
+) -> None:
+    st.markdown("#### Memória de cálculo de frequência e recorrência (ADM)")
+    table = _analytical_table_adm(base, limit)
+    st.dataframe(
+        table,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Data de compra": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "Idade atual": st.column_config.NumberColumn(format="%.1f anos"),
+            "Percentil idade": st.column_config.NumberColumn(format="percent"),
+            "Reparações no período": st.column_config.NumberColumn(format="%.0f"),
+            "Anos observados": st.column_config.NumberColumn(format="%.0f"),
+            "Reparações por ano observado": st.column_config.NumberColumn(
+                format="%.2f"
+            ),
+            "Percentil frequência": st.column_config.NumberColumn(
+                format="percent"
+            ),
+            "Anos com reparação": st.column_config.NumberColumn(format="%.0f"),
+            "Primeiro ano com reparação": st.column_config.NumberColumn(
+                format="%.0f"
+            ),
+            "Último ano com reparação": st.column_config.NumberColumn(
+                format="%.0f"
+            ),
+            "Recorrência": st.column_config.NumberColumn(format="percent"),
+            "Percentil recorrência": st.column_config.NumberColumn(
+                format="percent"
+            ),
+            "Custo com impostos": st.column_config.NumberColumn(format="R$ %.2f"),
+            "Percentil custo": st.column_config.NumberColumn(format="percent"),
+            "Índice de prioridade": st.column_config.ProgressColumn(
+                min_value=0,
+                max_value=100,
+                format="%.1f",
+            ),
+        },
+    )
+    df_config.footer_df(table, "registros localizados")
+    download_xlsx.download(
+        df=_analytical_table_adm(base, None),
+        key="ranking_adm",
+        name_file="ranking_adm",
+    )
 
 
 def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
@@ -244,35 +327,35 @@ def show() -> None:
         anos_selecionados,
     )
 
-    df_dashboard_filtrado = df_dashboard.copy()
-    serie = st.text_input(
-        "Número de série para análise individual",)
-    st.write(serie)
-    if serie:
-        df_dashboard_filtrado = df_dashboard_filtrado[
-            (df_dashboard_filtrado['Número de série'] == serie)
-            |
-            (df_dashboard_filtrado['Número de Série'] == serie)
-        ]
-        st.dataframe(df_dashboard_filtrado, hide_index=True, width="stretch")
+    # df_dashboard_filtrado = df_dashboard.copy()
+    # serie = st.text_input(
+    #     "Número de série para análise individual",)
+    # st.write(serie)
+    # if serie:
+    #     df_dashboard_filtrado = df_dashboard_filtrado[
+    #         (df_dashboard_filtrado['Número de série'] == serie)
+    #         |
+    #         (df_dashboard_filtrado['Número de Série'] == serie)
+    #     ]
+    #     st.dataframe(df_dashboard_filtrado, hide_index=True, width="stretch")
 
-    st.subheader("Dashboard de análise de reparações", divider="red")
-    df_com_periodo_filtrado = df_com_periodo.copy()
-    serie = st.text_input(
-        "Número de série para análise individual2",)
-    if serie:
-        df_com_periodo_filtrado = df_com_periodo_filtrado[
-            (df_com_periodo_filtrado['Número de série'] == serie)
-            |
-            (df_com_periodo_filtrado['Número de Série'] == serie)
-        ]
-        st.dataframe(df_com_periodo_filtrado, hide_index=True, width="stretch")
-        df_check = df_com_periodo_filtrado[['Reparos_no_período']]
-        st.dataframe(df_check, hide_index=True, width="stretch")
-        # st.dataframe(df_com_periodo_filtrado[['Reparos_no_período']], hide_index=True, width="stretch")
-        st.write('Reparos_no_período' in df_com_periodo_filtrado.columns)
+    # st.subheader("Dashboard de análise de reparações", divider="red")
+    # df_com_periodo_filtrado = df_com_periodo.copy()
+    # serie = st.text_input(
+    #     "Número de série para análise individual2",)
+    # if serie:
+    #     df_com_periodo_filtrado = df_com_periodo_filtrado[
+    #         (df_com_periodo_filtrado['Número de série'] == serie)
+    #         |
+    #         (df_com_periodo_filtrado['Número de Série'] == serie)
+    #     ]
+    #     st.dataframe(df_com_periodo_filtrado, hide_index=True, width="stretch")
+    #     df_check = df_com_periodo_filtrado[['Reparos_no_período']]
+    #     st.dataframe(df_check, hide_index=True, width="stretch")
+    #     # st.dataframe(df_com_periodo_filtrado[['Reparos_no_período']], hide_index=True, width="stretch")
+    #     st.write('Reparos_no_período' in df_com_periodo_filtrado.columns)
 
-    st.divider()
+    # st.divider()
 
     df_com_periodo["Quantidade de reparos"] = df_com_periodo["Reparos_no_período"]
     df_com_periodo["# Reparos"] = df_com_periodo["Reparos_no_período"]
@@ -525,10 +608,15 @@ def show() -> None:
             )
 
         with right:
-            st.plotly_chart(
-                dashboard_charts.grafico_matriz_prioridade(base),
-                width="stretch",
-            )
+            with st.container(
+                height=430,
+                vertical_alignment="center",
+                key="container-graph-custo_por_idade",
+            ):
+                st.plotly_chart(
+                    dashboard_charts.grafico_custo_manutencoes_por_idade(base),
+                    width="stretch",
+                )
 
             if st.session_state['config']['relacaoReparosIdade']:
 
@@ -561,7 +649,99 @@ def show() -> None:
                 width="stretch",
             )
 
+        st.plotly_chart(
+            dashboard_charts.grafico_matriz_prioridade(base),
+            width="stretch",
+        )
+
+        with st.expander(
+            "Como interpretar a matriz de prioridade",
+            expanded=False,
+            key="expander_interpretacao_matriz",
+        ):
+            st.markdown(
+                """
+                ### Como ler o gráfico
+                Cada ponto representa **uma máquina do parque**. A matriz permite analisar simultaneamente diferentes dimensões do comportamento de cada equipamento:
+
+                - **posição horizontal:** idade atual da máquina;
+                - **posição vertical:** quantidade de reparações registradas no período;
+                - **tamanho da bolha:** custo acumulado das reparações com impostos;
+                - **cor:** recomendação analítica — **Manter**, **Monitorar**, **Planejar renovação** ou **Troca prioritária**.                
+                > **Importante:** a recomendação não é determinada apenas pela posição da máquina no gráfico. A classificação considera também o **Índice de Prioridade**, que combina idade, frequência de reparações, custo e recorrência em anos diferentes.
+                ---
+
+                ### Como interpretar as regiões do gráfico
+
+                Podemos interpretar a matriz considerando quatro zonas conceituais.
+
+                > **Parte inferior esquerda — menor exposição**
+                >
+                > Máquinas mais novas e com poucas reparações registradas. É onde se espera encontrar principalmente equipamentos classificados como **Manter** ou **Monitorar**.
+                >
+                > Quando as bolhas também são pequenas, isso reforça a existência de **baixo impacto financeiro observado no período**.
+
+                > **Parte superior esquerda — maior frequência apesar da pouca idade**
+                >
+                > Máquinas relativamente novas, mas com quantidade elevada de reparações.
+                >
+                > Esses equipamentos merecem investigação, pois podem estar associados a:
+                >
+                > - utilização mais intensa;
+                > - aplicação particularmente severa;
+                > - condições operacionais específicas;
+                > - comportamento excepcional em relação ao restante do parque.
+                >
+                > **Bolhas maiores** indicam que, além da frequência elevada, as reparações também estão gerando maior impacto financeiro.
+
+                > **Parte inferior direita — máquinas envelhecidas, mas com baixo impacto recente**
+                >
+                > Equipamentos com idade mais elevada, porém com poucas reparações registradas no período.
+                >
+                > A metodologia evita recomendar a substituição automática apenas pela idade. Por isso, máquinas nessa região podem permanecer classificadas como **Monitorar** ou **Manter**, principalmente quando também apresentam baixo custo observado.
+                >
+                > A idade funciona como um **fator de exposição ao ciclo de vida**, mas não constitui, isoladamente, evidência suficiente para justificar a troca.
+
+                > **Parte superior direita — maior exposição operacional e financeira**
+                >
+                > Máquinas mais antigas e com várias reparações registradas. Essa é a região que normalmente exige maior atenção.
+                >
+                > Quando esses equipamentos também apresentam **bolhas maiores**, ocorre a combinação de:
+                >
+                > - idade elevada;
+                > - alta frequência de reparações;
+                > - maior custo acumulado.
+                >
+                > Se as ocorrências também estiverem distribuídas por diferentes anos, caracterizando **recorrência**, aumenta a evidência para priorização da renovação.
+
+                ---
+
+                ### O que a matriz ajuda a identificar
+
+                A principal finalidade da matriz é mostrar que **idade e quantidade de reparações não devem ser analisadas isoladamente**.
+
+                Por exemplo:
+
+                - uma máquina mais nova pode exigir atenção se apresentar **muitas reparações e custo elevado**;
+                - uma máquina antiga pode permanecer em operação quando apresentar **baixo impacto recente**;
+                - duas máquinas com idade e quantidade de reparações semelhantes podem receber recomendações diferentes caso apresentem **custos ou recorrências distintas**;
+                - as máquinas com maior prioridade tendem a ser aquelas que apresentam o **pior conjunto de sinais técnicos e econômicos**.
+
+                > **Leitura da matriz**
+                >
+                > A idade, isoladamente, não determina a recomendação de renovação. A matriz combina visualmente **envelhecimento, frequência de reparações e impacto financeiro**, enquanto as cores representam uma classificação que também considera a **recorrência das ocorrências**.
+                >
+                > Dessa forma, a análise direciona a atenção para as máquinas que apresentam a combinação mais relevante de **idade, frequência, custo e recorrência**, permitindo estruturar uma renovação seletiva e baseada em evidências.
+
+                ---
+
+                **Observação:** a matriz é uma ferramenta de apoio à priorização. A decisão final de substituição deve considerar também aplicação, condição física, criticidade operacional, disponibilidade de equipamento reserva e demais particularidades da operação.
+                """
+            )
+
         _render_ranking(base, None)
+        if role == "adm":
+            _render_ranking_adm(base, None)
 
     with tab_modelos:
         series_filtradas = base["Número de Série"].tolist()
@@ -669,7 +849,7 @@ def show() -> None:
                 "Troca prioritária. "
                 "Depois, pode ser ajustado para selecionar as máquinas com maior "
                 "índice analítico. Os percentuais "
-                "mostram concentração histórica no período, não redução garantida."
+                "mostram concentração histórica no período."
             ),
             key=scenario_quantity_key,
         )
@@ -742,14 +922,18 @@ def show() -> None:
         )
         download_xlsx.download(df=_analytical_table(selected, None), key='renovacao')
 
-        with st.expander("Como o índice de prioridade é calculado"):
+        with st.expander(
+            "Como o índice de prioridade é calculado",
+            expanded=False,
+            key="expander_como_indice_eh_calculado"
+        ):
             st.markdown(
                 """
                 O índice é relativo ao parque filtrado e combina quatro dimensões:
                 **idade (25%)**, **frequência observada (30%)**, **custo observado
                 (30%)** e **recorrência em anos diferentes (15%)**. Ele serve para
-                ordenar a investigação comercial. Não é uma previsão de falha e não
-                substitui avaliação de aplicação, produtividade ou condição física.
+                ordenar a investigação técnica. Não é uma previsão de falha e não
+                substitui avaliação condição física.
                 """
             )
 
@@ -893,7 +1077,7 @@ def show() -> None:
                     value=False,
                     help=(
                         "Inclui o Manual de Metodologia do Índice de "
-                        "Prioridade de Renovação v2 como Anexo E."
+                        "Prioridade de Renovação como Anexo E."
                     ),
                 )
             with col_base:
@@ -923,6 +1107,9 @@ def show() -> None:
                 "Reparadas": st.session_state.get("filtro_reparadas"),
                 "Garantia": st.session_state.get("filtro_garantia"),
                 "Idades": st.session_state.get("filter_idade"),
+                "Número de série": st.session_state.get(
+                    "filtro_numero_serie"
+                ),
             }
             config_pdf = PdfReportConfig(
                 cliente=cliente_relatorio.strip(),

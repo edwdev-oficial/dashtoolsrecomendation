@@ -2824,7 +2824,7 @@ class _ReportRenderer:
         y = self._methodology_bullets(
             [
                 "Quanto maior o índice, maior a prioridade relativa dentro do parque analisado.",
-                "O índice não representa probabilidade de falha, vida útil restante ou economia garantida.",
+                "O índice não representa probabilidade de falha ou vida útil restante.",
                 "A classificação deve ser confirmada em campo, considerando aplicação, condição física, reserva e criticidade operacional.",
                 "Se o parque ou os filtros mudarem, as posições também podem mudar.",
             ],

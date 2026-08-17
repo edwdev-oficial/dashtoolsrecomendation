@@ -481,8 +481,8 @@ def page_2(c: canvas.Canvas) -> None:
         c,
         [
             "Quanto maior o índice, maior a prioridade relativa dentro do parque analisado.",
-            "O índice não representa probabilidade de falha, vida útil restante ou economia garantida.",
-            "A classificação deve ser confirmada em campo, considerando aplicação, condição física, disponibilidade de reserva e criticidade operacional.",
+            "O índice não representa probabilidade de falha ou vida útil restante.",
+            "A classificação pode ser confirmada em campo, considerando aplicação, condição física, disponibilidade de reserva e criticidade operacional.",
             "O resultado é relativo ao conjunto analisado. Se o parque ou os filtros mudarem, as posições também podem mudar.",
         ],
         MARGIN_X,
@@ -646,7 +646,7 @@ def page_4(c: canvas.Canvas) -> None:
         CONTENT_W,
         59,
         "Importante",
-        "O índice deve ser comparado dentro do mesmo estudo e da mesma população. Não é recomendado comparar diretamente índices produzidos<br/>com parques ou filtros diferentes.",
+        "O índice deve ser comparado dentro do mesmo estudo e da mesma população. Não é recomendado comparar diretamente índices produzidos com parques ou filtros diferentes.",
         red_fill=True,
     )
     c.showPage()
@@ -715,7 +715,7 @@ def page_5(c: canvas.Canvas) -> None:
         CONTENT_W,
         58,
         "Governança da decisão",
-        "As faixas transformam a pontuação em uma fila de ação. A autorização de troca deve considerar também a inspeção técnica, a aplicação<br/>e o impacto operacional da indisponibilidade.",
+        "As faixas transformam a pontuação em uma fila de ação. A autorização de troca deve considerar também a inspeção técnica, a aplicação e o impacto operacional da indisponibilidade.",
     )
     c.showPage()
 
@@ -947,7 +947,7 @@ def page_9(c: canvas.Canvas) -> None:
         "TE-600",
         "9,8",
         "Manter",
-        "Idade de 4,8 anos, nenhuma reparação e custo zero na janela observada. Sem ocorrências recentes e abaixo de 8<br/>anos, a máquina permanece no cenário atual.",
+        "Idade de 4,8 anos, nenhuma reparação e custo zero na janela observada. Sem ocorrências recentes e abaixo de 8 anos, a máquina permanece no cenário atual.",
         BEIGE,
     )
     draw_paragraph(c, "O que estes exemplos demonstram", MARGIN_X, 544, 350, size=14, bold=True)
@@ -992,7 +992,7 @@ def page_10(c: canvas.Canvas) -> None:
             "Inspeção da condição física e teste de aplicação.",
             "Medição de dias indisponíveis, produtividade e custo de oportunidade.",
             "Avaliação de segurança, ergonomia, peças, acessórios e compatibilidade tecnológica.",
-            "Análise financeira da alternativa comercial: compra, locação ou Gestão de Frotas.",
+            "Análise financeira da alternativa comercial: compra ou Gestão de Frotas.",
         ],
         MARGIN_X,
         254,
@@ -1028,7 +1028,7 @@ def page_10(c: canvas.Canvas) -> None:
         CONTENT_W,
         56,
         "Conclusão",
-        "O ranking torna a decisão mais objetiva porque combina quatro dimensões em uma escala comum. Sua melhor utilização é como ponto<br/>de partida para uma renovação seletiva, validada tecnicamente e alinhada ao impacto real da operação.",
+        "O ranking torna a decisão mais objetiva porque combina quatro dimensões em uma escala comum. Sua melhor utilização é como ponto de partida para uma renovação seletiva, validada tecnicamente e alinhada ao impacto real da operação.",
     )
     c.showPage()
 

@@ -27,6 +27,36 @@ def test_matriz_prioridade_exibe_modelo_no_titulo_e_serie_na_primeira_linha() ->
     assert trace.hovertemplate.startswith(
         "<b>%{hovertext}</b><br>Nº de série: %{customdata[0]}"
     )
+    assert figure.layout.margin.t == 72
+    assert figure.layout.margin.b == 45
+    assert figure.layout.height == 455
+    assert figure.layout.legend.title.side == "left"
+    assert figure.layout.legend.y == -0.30
+    assert figure.layout.legend.yanchor == "top"
+
+
+def test_pareto_separa_titulo_do_eixo_x_da_legenda() -> None:
+    base = pd.DataFrame(
+        {
+            "Posição": [1, 2],
+            "Custo com impostos": [1_000.0, 500.0],
+            "Percentual acumulado": [2 / 3, 1.0],
+            "Número de Série": ["1001", "1002"],
+            "Modelo": ["TE 1", "TE 2"],
+            "Índice de prioridade": [90.0, 70.0],
+            "Reparações no período": [4, 2],
+            "Recomendação": ["Troca prioritária", "Planejar renovação"],
+        }
+    )
+
+    figure = dashboard_charts.grafico_pareto_custo_maquina(base)
+
+    assert figure.layout.legend.y == -0.30
+    assert figure.layout.legend.yanchor == "top"
+    assert figure.layout.margin.t == 82
+    assert figure.layout.margin.b == 60
+    assert figure.layout.height == 470
+    assert figure.layout.yaxis2.range == (0, 105)
 
 
 def test_custo_anual_exibe_rotulos_inteiros_acima_das_barras() -> None:
@@ -62,3 +92,20 @@ def test_custo_anual_rotula_total_projetado_sem_duplicar_realizado() -> None:
     assert list(realized.text) == ["R$ 100.000", None]
     assert list(projected.text) == [None, "R$ 180.000"]
     assert projected.texttemplate == "%{text}"
+
+
+def test_custo_manutencoes_por_idade_soma_custos_da_mesma_idade() -> None:
+    base = pd.DataFrame(
+        {
+            "Idade atual": [2.2, 2.9, 5.1],
+            "Custo com impostos": [100.0, 250.0, 400.0],
+        }
+    )
+
+    figure = dashboard_charts.grafico_custo_manutencoes_por_idade(base)
+    trace = figure.data[0]
+
+    assert list(trace.x) == [2, 5]
+    assert list(trace.y) == [350.0, 400.0]
+    assert trace.texttemplate == "R$ %{text:,.0f}"
+    assert figure.layout.title.text == "Custo de manutenções por idade"

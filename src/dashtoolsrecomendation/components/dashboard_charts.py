@@ -132,6 +132,47 @@ def grafico_maquinas_por_idade(df: pd.DataFrame) -> Figure:
     return configurar_layout(fig, altura=430)
 
 
+def grafico_custo_manutencoes_por_idade(df: pd.DataFrame) -> Figure:
+    work = pd.DataFrame(
+        {
+            "Idade (anos)": (
+                pd.to_numeric(df["Idade atual"], errors="coerce")
+                .fillna(0)
+                .clip(lower=0)
+                .astype(int)
+            ),
+            "Custo de manutenções": pd.to_numeric(
+                df["Custo com impostos"], errors="coerce"
+            ).fillna(0),
+        }
+    )
+    custo_por_idade = (
+        work.groupby("Idade (anos)", as_index=False)["Custo de manutenções"]
+        .sum()
+        .sort_values("Idade (anos)")
+    )
+    fig = px.bar(
+        custo_por_idade,
+        x="Idade (anos)",
+        y="Custo de manutenções",
+        text="Custo de manutenções",
+        title="Custo de manutenções por idade",
+        color_discrete_sequence=[RED],
+    )
+    fig.update_traces(
+        texttemplate="R$ %{text:,.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>Idade: %{x} anos</b><br>"
+            "Custo de manutenções: R$ %{y:,.2f}<extra></extra>"
+        ),
+    )
+    fig.update_xaxes(dtick=1)
+    fig.update_yaxes(tickprefix="R$ ", separatethousands=True)
+    return configurar_layout(fig, altura=400)
+
+
 def _grafico_faixa_barra(
     df: pd.DataFrame,
     value_column: str,
@@ -436,6 +477,7 @@ def grafico_matriz_prioridade(df: pd.DataFrame) -> Figure:
             "Motivo principal",
         ],
         title="Matriz de prioridade de renovação",
+        subtitle="Eixo X: idade atual | Eixo Y: reparações no período | Tamanho da bolha: custo com impostos",
         labels={
             "Idade atual": "Idade atual (anos)",
             "Reparações no período": "Reparações registradas no período",
@@ -457,52 +499,293 @@ def grafico_matriz_prioridade(df: pd.DataFrame) -> Figure:
             "<extra></extra>"
         ),
     )
-    fig.update_layout(legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center"))
-    return configurar_layout(fig, altura=430)
+    configurar_layout(fig, altura=455)
+    # O título desta matriz possui uma segunda linha explicativa. A margem
+    # superior padrão de 45 px deixa o subtítulo encostado na área do gráfico.
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=72, b=45),
+        legend=dict(
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=-0.30,
+            yanchor="top",
+            title=dict(text="Recomendação", side="left"),
+        ),
+    )
+    return fig
 
 
-def grafico_pareto_custo_maquina(df: pd.DataFrame, quantidade_selecionada: int = 0) -> Figure:
+# def grafico_pareto_custo_maquina(df: pd.DataFrame, quantidade_selecionada: int = 0) -> Figure:
+#     from plotly.subplots import make_subplots
+#     import plotly.graph_objects as go
+
+#     work = df.copy()
+#     colors = [RED if position <= quantidade_selecionada else BEIGE for position in work["Posição"]]
+#     fig = make_subplots(specs=[[{"secondary_y": True}]])
+#     fig.add_trace(
+#         go.Bar(
+#             x=work["Posição"],
+#             y=work["Custo com impostos"],
+#             name="Custo por máquina",
+#             marker_color=colors,
+#             customdata=work[["Número de Série", "Modelo"]],
+#             hovertemplate=(
+#                 "<b>Posição %{x}</b><br>Série: %{customdata[0]}"
+#                 "<br>Modelo: %{customdata[1]}<br>Custo: R$ %{y:,.2f}<extra></extra>"
+#             ),
+#         ),
+#         secondary_y=False,
+#     )
+#     fig.add_trace(
+#         go.Scatter(
+#             x=work["Posição"],
+#             y=work["Percentual acumulado"] * 100,
+#             name="Percentual acumulado",
+#             mode="lines",
+#             line=dict(color="#ffffff", width=3),
+#             hovertemplate="Posição %{x}<br>Acumulado: %{y:.1f}%<extra></extra>",
+#         ),
+#         secondary_y=True,
+#     )
+#     fig.update_layout(title="Pareto do custo por máquina")
+#     fig.update_xaxes(title_text="Máquinas ordenadas pelo custo")
+#     fig.update_yaxes(title_text="Custo observado", tickprefix="R$ ", secondary_y=False)
+#     fig.update_yaxes(
+#         title_text="Percentual acumulado",
+#         ticksuffix="%",
+#         range=[0, 105],
+#         secondary_y=True,
+#     )
+#     configurar_layout(fig, altura=430)
+#     fig.update_layout(
+#         legend=dict(y=-0.30, yanchor="top"),
+#         margin=dict(l=20, r=20, t=45, b=45),
+#     )
+#     return fig
+
+
+def grafico_pareto_custo_maquina(
+    df: pd.DataFrame,
+    quantidade_selecionada: int = 0,
+) -> Figure:
     from plotly.subplots import make_subplots
     import plotly.graph_objects as go
+    import numpy as np
 
     work = df.copy()
-    colors = [RED if position <= quantidade_selecionada else BEIGE for position in work["Posição"]]
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # ---------------------------------------------------------
+    # 1. Define quais máquinas pertencem ao cenário
+    #    O cenário é baseado no ÍNDICE DE PRIORIDADE,
+    #    e não exclusivamente no custo.
+    # ---------------------------------------------------------
+    quantidade_selecionada = min(
+        quantidade_selecionada,
+        len(work),
+    )
+
+    ranking_prioridade = work.sort_values(
+        by=[
+            "Índice de prioridade",
+            "Custo com impostos",
+            "Reparações no período",
+        ],
+        ascending=[False, False, False],
+    )
+
+    series_cenario = set(
+        ranking_prioridade
+        .head(quantidade_selecionada)["Número de Série"]
+        .astype(str)
+    )
+
+    work["No cenário"] = (
+        work["Número de Série"]
+        .astype(str)
+        .isin(series_cenario)
+    )
+
+    # ---------------------------------------------------------
+    # 2. Ordena o Pareto exclusivamente pelo custo
+    # ---------------------------------------------------------
+    work = (
+        work
+        .sort_values(
+            by="Custo com impostos",
+            ascending=False,
+        )
+        .reset_index(drop=True)
+    )
+
+    work["Posição Pareto"] = np.arange(
+        1,
+        len(work) + 1,
+    )
+
+    # ---------------------------------------------------------
+    # 3. Calcula custo e percentual acumulados
+    # ---------------------------------------------------------
+    custo_total = work["Custo com impostos"].sum()
+
+    work["Custo acumulado"] = (
+        work["Custo com impostos"].cumsum()
+    )
+
+    if custo_total > 0:
+        work["Percentual acumulado"] = (
+            work["Custo acumulado"] / custo_total
+        )
+    else:
+        work["Percentual acumulado"] = 0.0
+
+    # ---------------------------------------------------------
+    # 4. Separa as barras em duas séries
+    #    Isso permite uma legenda clara.
+    # ---------------------------------------------------------
+    work["Custo cenário"] = np.where(
+        work["No cenário"],
+        work["Custo com impostos"],
+        np.nan,
+    )
+
+    work["Custo fora cenário"] = np.where(
+        ~work["No cenário"],
+        work["Custo com impostos"],
+        np.nan,
+    )
+
+    # ---------------------------------------------------------
+    # 5. Criação do gráfico
+    # ---------------------------------------------------------
+    fig = make_subplots(
+        specs=[[{"secondary_y": True}]]
+    )
+
+    custom_data = work[
+        [
+            "Número de Série",
+            "Modelo",
+            "Índice de prioridade",
+            "Recomendação",
+        ]
+    ]
+
+    # Barras das máquinas selecionadas pelo ranking
     fig.add_trace(
         go.Bar(
-            x=work["Posição"],
-            y=work["Custo com impostos"],
-            name="Custo por máquina",
-            marker_color=colors,
-            customdata=work[["Número de Série", "Modelo"]],
+            x=work["Posição Pareto"],
+            y=work["Custo cenário"],
+            name="Máquinas no cenário",
+            marker_color=RED,
+            customdata=custom_data,
             hovertemplate=(
-                "<b>Posição %{x}</b><br>Série: %{customdata[0]}"
-                "<br>Modelo: %{customdata[1]}<br>Custo: R$ %{y:,.2f}<extra></extra>"
+                "<b>Posição no Pareto: %{x}</b>"
+                "<br>Nº de série: %{customdata[0]}"
+                "<br>Modelo: %{customdata[1]}"
+                "<br>Custo: R$ %{y:,.2f}"
+                "<br>Índice de prioridade: %{customdata[2]:.1f}"
+                "<br>Recomendação: %{customdata[3]}"
+                "<br><b>Selecionada no cenário</b>"
+                "<extra></extra>"
             ),
         ),
         secondary_y=False,
     )
+
+    # Barras das máquinas fora do cenário
+    fig.add_trace(
+        go.Bar(
+            x=work["Posição Pareto"],
+            y=work["Custo fora cenário"],
+            name="Fora do cenário",
+            marker_color=BEIGE,
+            customdata=custom_data,
+            hovertemplate=(
+                "<b>Posição no Pareto: %{x}</b>"
+                "<br>Nº de série: %{customdata[0]}"
+                "<br>Modelo: %{customdata[1]}"
+                "<br>Custo: R$ %{y:,.2f}"
+                "<br>Índice de prioridade: %{customdata[2]:.1f}"
+                "<br>Recomendação: %{customdata[3]}"
+                "<br>Fora do cenário selecionado"
+                "<extra></extra>"
+            ),
+        ),
+        secondary_y=False,
+    )
+
+    # Linha branca: percentual acumulado do custo
     fig.add_trace(
         go.Scatter(
-            x=work["Posição"],
+            x=work["Posição Pareto"],
             y=work["Percentual acumulado"] * 100,
-            name="Percentual acumulado",
+            name="Percentual acumulado do custo",
             mode="lines",
-            line=dict(color="#ffffff", width=3),
-            hovertemplate="Posição %{x}<br>Acumulado: %{y:.1f}%<extra></extra>",
+            line=dict(
+                color="#ffffff",
+                width=3,
+            ),
+            customdata=work[
+                ["Custo acumulado"]
+            ],
+            hovertemplate=(
+                "<b>Posição %{x}</b>"
+                "<br>Custo acumulado das máquinas "
+                "mais caras: R$ %{customdata[0]:,.2f}"
+                "<br>Percentual acumulado do custo: "
+                "%{y:.1f}%"
+                "<extra></extra>"
+            ),
         ),
         secondary_y=True,
     )
-    fig.update_layout(title="Pareto do custo por máquina")
-    fig.update_xaxes(title_text="Máquinas ordenadas pelo custo")
-    fig.update_yaxes(title_text="Custo observado", tickprefix="R$ ", secondary_y=False)
+
+    # ---------------------------------------------------------
+    # 6. Layout
+    # ---------------------------------------------------------
+    configurar_layout(fig, altura=470)
+    fig.update_layout(
+        title=dict(
+            text=(
+                "Pareto do custo por máquina"
+                "<br>"
+                "<sup>"
+                "Barras ordenadas do maior para o menor custo | "
+                "Vermelho: máquinas selecionadas no cenário | "
+                "Linha branca: percentual acumulado do custo total"
+                "</sup>"
+            ),
+        ),
+        barmode="overlay",
+        legend=dict(
+            orientation="h",
+            y=-0.30,
+            yanchor="top",
+            x=0.5,
+            xanchor="center",
+        ),
+        margin=dict(l=20, r=20, t=82, b=60),
+    )
+
+    fig.update_xaxes(
+        title_text="Máquinas ordenadas pelo custo"
+    )
+
     fig.update_yaxes(
-        title_text="Percentual acumulado",
+        title_text="Custo observado",
+        tickprefix="R$ ",
+        secondary_y=False,
+    )
+
+    fig.update_yaxes(
+        title_text="Percentual acumulado do custo",
         ticksuffix="%",
         range=[0, 105],
         secondary_y=True,
     )
-    return configurar_layout(fig, altura=430)
+
+    return fig
 
 
 def grafico_evolucao_reparacoes(df: pd.DataFrame) -> Figure:

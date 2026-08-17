@@ -41,6 +41,12 @@ FILTERS = [
 
 AGE_COLUMN = "idade_int (a)"
 AGE_FILTER_KEY = "filter_idade"
+SERIAL_FILTER = FilterSpec(
+    "Número de Série",
+    "Número de série",
+    "multiselect",
+    "filtro_numero_serie",
+)
 INCLUDE_AMS_KEY = "filtro_incluir_somente_ams"
 INCLUDE_STOLEN_KEY = "filtro_incluir_baixadas_bo"
 CONTRACT_KEY_PREFIX = "filtro_termino_contrato"
@@ -50,6 +56,7 @@ def limpar_estado_filtros() -> None:
     """Remove todo o estado dos filtros; os widgets voltam aos padrões no rerun."""
     widget_keys = [spec.key for spec in FILTERS] + [
         AGE_FILTER_KEY,
+        SERIAL_FILTER.key,
         INCLUDE_AMS_KEY,
         INCLUDE_STOLEN_KEY,
         f"{CONTRACT_KEY_PREFIX}_incluir_sem_data",
@@ -68,7 +75,9 @@ def aplicar_selecoes(
 ) -> pd.DataFrame:
     """Aplica seleções ao conjunto original; vazio significa sem restrição."""
     result = df.copy()
-    specs_by_column = {spec.column: spec for spec in FILTERS}
+    specs_by_column = {
+        spec.column: spec for spec in [*FILTERS, SERIAL_FILTER]
+    }
 
     for column, selected in selections.items():
         if not selected or column not in result.columns:
@@ -298,6 +307,23 @@ def aplicar_filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     if age_description:
         descriptions.append(age_description)
 
+    serial_options = aplicar_selecoes(cascading_options, {}, ages)
+    serial_numbers = create_filter.create_filter(
+        df=serial_options,
+        coluna=SERIAL_FILTER.column,
+        tilte=SERIAL_FILTER.title,
+        sidebar=True,
+        type="multiselect",
+        key=SERIAL_FILTER.key,
+    )
+    serial_description = _describe_selection(
+        SERIAL_FILTER.title,
+        serial_numbers,
+    )
+    if serial_description:
+        descriptions.append(serial_description)
+
+    selections[SERIAL_FILTER.column] = serial_numbers
     result = aplicar_selecoes(options_base, selections, ages)
     grupo = selections.get("Grupo", "")
     grupo_value = grupo if isinstance(grupo, str) else ""

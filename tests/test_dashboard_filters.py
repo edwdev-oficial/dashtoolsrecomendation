@@ -15,6 +15,7 @@ def _fleet() -> pd.DataFrame:
             "Grupo": ["Frota", "Frota", "Comprado", "Comprado", "Frota"],
             "Linha": ["Rompedor", "Serra", "Rompedor", "Furadeira", "Serra"],
             "Modelo": ["A", "B", "A", "C", "C"],
+            "Número de Série": ["1001", "1002", "1003", "1004", "1005"],
             "idade_int (a)": [1, 2, 3, 4, 5],
             "Data de Término do Contrato": [
                 "2024-01-01",
@@ -54,6 +55,17 @@ def test_linha_restringe_as_opcoes_disponiveis_de_modelo() -> None:
     contexto_modelo = aplicar_selecoes(base, {"Linha": ["Rompedor"]})
 
     assert contexto_modelo["Modelo"].drop_duplicates().tolist() == ["A"]
+
+
+def test_numero_de_serie_pode_filtrar_uma_ou_varias_maquinas() -> None:
+    base = _fleet()
+
+    result = aplicar_selecoes(
+        base,
+        {"Número de Série": ["1002", "1005"]},
+    )
+
+    assert result["id"].tolist() == [2, 5]
 
 
 def test_filtro_de_contrato_afeta_apenas_frota() -> None:
