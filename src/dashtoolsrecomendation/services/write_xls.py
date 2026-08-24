@@ -4,6 +4,9 @@ from io import BytesIO
 
 SERIAL_COLUMN = 'Número de série'
 SERIAL_ALIASES = (SERIAL_COLUMN, 'Número de Série')
+AGE_REPORT_COLUMN = 'Idade Atual (anos)'
+AGE_REPORT_ALIASES = ('Idade atual', 'Idade Atual')
+COST_REPORT_COLUMN = 'Custo com impostos'
 
 
 def normalizar_coluna_numero_serie(df):
@@ -22,6 +25,30 @@ def normalizar_coluna_numero_serie(df):
     result = result.drop(columns=aliases)
     result.insert(position, SERIAL_COLUMN, numero_serie)
     return result
+
+
+def normalizar_coluna_idade_atual(df):
+    """Padroniza o título da idade nas planilhas geradas para relatórios."""
+    result = df.copy()
+    aliases = [column for column in AGE_REPORT_ALIASES if column in result.columns]
+    if not aliases:
+        return result
+
+    position_columns = [*aliases]
+    if AGE_REPORT_COLUMN in result.columns:
+        position_columns.append(AGE_REPORT_COLUMN)
+    position = min(result.columns.get_loc(column) for column in position_columns)
+    idade_atual = result[aliases[0]]
+    for column in aliases[1:]:
+        idade_atual = idade_atual.fillna(result[column])
+
+    result = result.drop(columns=aliases)
+    if AGE_REPORT_COLUMN in result.columns:
+        idade_atual = result[AGE_REPORT_COLUMN].fillna(idade_atual)
+        result = result.drop(columns=[AGE_REPORT_COLUMN])
+    result.insert(position, AGE_REPORT_COLUMN, idade_atual)
+    return result
+
 
 def formatar_colunas_data(
     df,
@@ -76,6 +103,16 @@ def formatar_colunas_data(
 def gerar_excel(df_recebido):
 
     df = normalizar_coluna_numero_serie(df_recebido)
+    df = normalizar_coluna_idade_atual(df)
+
+    if AGE_REPORT_COLUMN in df.columns:
+        df[AGE_REPORT_COLUMN] = pd.to_numeric(
+            df[AGE_REPORT_COLUMN], errors='coerce'
+        )
+    if COST_REPORT_COLUMN in df.columns:
+        df[COST_REPORT_COLUMN] = pd.to_numeric(
+            df[COST_REPORT_COLUMN], errors='coerce'
+        )
 
     output = BytesIO()
 
@@ -172,10 +209,29 @@ def gerar_excel(df_recebido):
             "bottom_color": linha_tenue,
             "font_name": "Nunito",
             "font_size": 10,
-        })        
+        })
+
+        formato_linha_idade = workbook.add_format({
+            "num_format": "0.0",
+            "align": "center",
+            "valign": "vcenter",
+            "bottom": 5,
+            "bottom_color": linha_tenue,
+            "font_name": "Nunito",
+            "font_size": 10,
+        })
+
+        formato_linha_custo = workbook.add_format({
+            "num_format": "0.00",
+            "valign": "vcenter",
+            "bottom": 5,
+            "bottom_color": linha_tenue,
+            "font_name": "Nunito",
+            "font_size": 10,
+        })
 
         ultima_linha = len(df)
-        ultima_coluna = min(26, len(df.columns) - 1)  # AA = índice 26
+        ultima_coluna = len(df.columns) - 1
 
         colunas_centralizadas = [
             'Id',
@@ -186,7 +242,12 @@ def gerar_excel(df_recebido):
             'Ferramenta de empréstimo permitida',
             'Cobertura de roubo',
             'Quantidade de reparos',
+            AGE_REPORT_COLUMN,
+            'Reparações no período',
+            'Anos com reparação',
             'Garantia',
+            'Fim período sem custo (dias)',
+            'Índice de prioridade',
             'Número do Equipamento',
             'Geração',
             'Status',
@@ -198,7 +259,11 @@ def gerar_excel(df_recebido):
                 valor = df.iloc[row_num - 1, col_num]
                 nome_coluna = df.columns[col_num]
 
-                if nome_coluna in colunas_centralizadas:
+                if nome_coluna == AGE_REPORT_COLUMN:
+                    formato = formato_linha_idade
+                elif nome_coluna == COST_REPORT_COLUMN:
+                    formato = formato_linha_custo
+                elif nome_coluna in colunas_centralizadas:
                     formato = formato_linha_centralizado
                 else:
                     formato = formato_linha

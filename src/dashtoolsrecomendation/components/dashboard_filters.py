@@ -330,10 +330,16 @@ def aplicar_filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     result = aplicar_filtro_termino_contrato(
         result,
         grupo=grupo_value,
-        options_df=result,
+        # A faixa de datas deve permanecer estÃ¡vel quando filtros posteriores,
+        # como Tipo, Linha ou Modelo, mudarem. Caso contrÃ¡rio, o date_input
+        # reduz seu mÃ¡ximo e persiste esse corte no session_state.
+        options_df=options_base,
     )
 
-    contract_description = _contract_filter_description(result, grupo_value)
+    contract_description = _contract_filter_description(
+        options_base,
+        grupo_value,
+    )
     if contract_description:
         descriptions.append(contract_description)
     _show_active_filters(descriptions)

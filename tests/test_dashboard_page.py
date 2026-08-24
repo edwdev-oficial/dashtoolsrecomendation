@@ -39,7 +39,7 @@ def test_tabela_adm_expoe_insumos_e_calculos_de_frequencia_e_recorrencia() -> No
         "Modelo",
         "Grupo",
         "Data de compra",
-        "Idade atual",
+        "Idade Atual (anos)",
         "Percentil idade",
         "Reparações no período",
         "Anos observados",
@@ -58,3 +58,60 @@ def test_tabela_adm_expoe_insumos_e_calculos_de_frequencia_e_recorrencia() -> No
     ]
     assert result.iloc[0]["Reparações por ano observado"] == 1.0
     assert result.iloc[0]["Recorrência"] == 0.75
+
+
+def test_dados_administrativos_separam_comprado_e_frota() -> None:
+    base = pd.DataFrame(
+        {
+            "Grupo": ["Comprado", "  FROTA ", "comprado", "Não informado"],
+            "Modelo": ["TE 1", "TE 2", "TE 1", "TE 3"],
+            "Custo com impostos": [100.0, 250.0, 300.0, 900.0],
+            "Reparações no período": [3, 2, 4, 50],
+        }
+    )
+
+    grupos, modelos, quantidades, reparacoes = (
+        dashboard._dados_administrativos_grupos(base)
+    )
+
+    assert grupos.to_dict("records") == [
+        {
+            "Grupo": "Comprado",
+            "Máquinas": 2,
+            "Reparações": 7,
+            "Custo com impostos": 400.0,
+        },
+        {
+            "Grupo": "Frota",
+            "Máquinas": 1,
+            "Reparações": 2,
+            "Custo com impostos": 250.0,
+        },
+    ]
+    assert modelos.to_dict("records") == [
+        {
+            "Modelo": "TE 1",
+            "Grupo": "Comprado",
+            "Custo com impostos": 400.0,
+        },
+        {"Modelo": "TE 2", "Grupo": "Frota", "Custo com impostos": 250.0},
+    ]
+    assert quantidades.to_dict("records") == [
+        {"Grupo": "Comprado", "Modelo": "TE 1", "Quantidade": 2},
+        {"Grupo": "Frota", "Modelo": "TE 2", "Quantidade": 1},
+    ]
+    assert reparacoes.to_dict("records") == [
+        {"Modelo": "TE 1", "Grupo": "Comprado", "Reparações": 7},
+        {"Modelo": "TE 2", "Grupo": "Frota", "Reparações": 2},
+    ]
+
+
+def test_texto_variacao_frota_indica_reducao_aumento_e_falta_de_base() -> None:
+    assert dashboard._texto_variacao_frota(3.68, 0.81) == "↓ 78% na Frota"
+    assert dashboard._texto_variacao_frota(100.0, 115.0) == "↑ 15% na Frota"
+    assert dashboard._texto_variacao_frota(10.0, 10.0) == (
+        "Sem variação entre os grupos"
+    )
+    assert dashboard._texto_variacao_frota(0.0, 5.0) == (
+        "Comparação indisponível sem Comprado"
+    )

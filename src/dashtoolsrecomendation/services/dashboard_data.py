@@ -51,6 +51,9 @@ def preparar_dashboard(
         "# Notif.": 0,
         "Garantia": "",
         "Grupo": "Não informado",
+        "Status da Ferramenta": "",
+        "Data de Término do Contrato": "",
+        "Fim do período sem custo": "",
     }
     for column, default in defaults.items():
         if column not in df.columns:
@@ -77,11 +80,59 @@ def preparar_dashboard(
         "Sim",
         "Não",
     )
+    grupo_normalizado = (
+        df["Grupo"].astype("string").fillna("").str.strip().str.casefold()
+    )
+    ultimo_reparo_vazio = (
+        df["Último Reparo"].astype("string").fillna("").str.strip().eq("")
+    )
+    ferramenta_roubada = (
+        df["Status da Ferramenta"]
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+        .eq("roubado")
+    )
+    garantia_bloqueada = (
+        grupo_normalizado.eq("comprado") & ultimo_reparo_vazio
+    ) | ferramenta_roubada
+    garantia_valida = (
+        df["Garantia"]
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.casefold()
+        .eq("dentro")
+        | grupo_normalizado.eq("frota")
+    )
     df["Garantia"] = np.where(
-        df["Garantia"].astype("string").str.lower().eq("dentro")
-        | df["Grupo"].astype("string").str.lower().eq("frota"),
+        (garantia_valida & ~garantia_bloqueada).fillna(False),
         "Sim",
         "Não",
+    )
+    df["Fim do período sem custo"] = np.where(
+        grupo_normalizado.eq("frota"),
+        df["Data de Término do Contrato"],
+        df["Fim do período sem custo"],
+    )
+    data_referencia = (hoje or pd.Timestamp.today()).normalize()
+    fim_periodo = pd.to_datetime(
+        df["Fim do período sem custo"],
+        format="mixed",
+        dayfirst=True,
+        errors="coerce",
+    ).dt.normalize()
+    fim_futuro_sem_garantia = df["Garantia"].eq("Não") & fim_periodo.gt(
+        data_referencia
+    )
+    df["Fim do período sem custo"] = df["Fim do período sem custo"].astype(
+        "object"
+    )
+    df.loc[fim_futuro_sem_garantia, "Fim do período sem custo"] = None
+    fim_periodo = fim_periodo.mask(fim_futuro_sem_garantia)
+    df["Fim período sem custo (dias)"] = (
+        (fim_periodo - data_referencia).dt.days.clip(lower=0).fillna(0).astype(int)
     )
     df["Reparo Rejeitado"] = np.where(
         df["# Notif."].gt(0) & df["# Notif."].gt(df["# Reparos"]),

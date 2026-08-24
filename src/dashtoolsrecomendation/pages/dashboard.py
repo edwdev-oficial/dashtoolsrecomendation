@@ -8,6 +8,7 @@ import streamlit as st
 
 from dashtoolsrecomendation import auth
 from dashtoolsrecomendation.components import cards, dashboard_charts, dashboard_filters
+from dashtoolsrecomendation.pages import fleet_renewal
 from dashtoolsrecomendation.reports import PdfReportConfig, gerar_relatorio_pdf
 from dashtoolsrecomendation.reports.generator import PDF_LAYOUT_VERSION
 from dashtoolsrecomendation.services import (
@@ -22,6 +23,9 @@ from dashtoolsrecomendation.utils import (
     download_xlsx,
     df_config
 )
+
+
+AGE_DISPLAY_COLUMN = "Idade Atual (anos)"
 
 
 def prepare_df() -> pd.DataFrame:
@@ -98,15 +102,132 @@ def _render_small_cards(items: list[tuple[str, str, str]]) -> None:
             cards.metric_card(label, value, subtitle)
 
 
+def _render_comparison_cards(items: list[tuple[str, str, str]]) -> None:
+    columns = st.columns(len(items))
+    for column, (label, value, subtitle) in zip(columns, items):
+        with column:
+            cards.comparison_metric_card(label, value, subtitle)
+
+
+def _texto_variacao_frota(valor_comprado: float, valor_frota: float) -> str:
+    if valor_comprado <= 0:
+        if valor_frota <= 0:
+            return "Sem valores nos dois grupos"
+        return "Comparação indisponível sem Comprado"
+
+    variacao = valor_frota / valor_comprado - 1
+    if abs(variacao) < 1e-12:
+        return "Sem variação entre os grupos"
+    indicador = "↓" if variacao < 0 else "↑"
+    return f"{indicador} {_percentual(abs(variacao), 0)} na Frota"
+
+
+def _dados_administrativos_grupos(
+    base: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Resume quantidade e custo dos grupos Comprado e Frota."""
+    grupos = (
+        base["Grupo"]
+        if "Grupo" in base.columns
+        else pd.Series("", index=base.index, dtype="string")
+    )
+    modelos = (
+        base["Modelo"]
+        if "Modelo" in base.columns
+        else pd.Series("Não identificado", index=base.index, dtype="string")
+    )
+    custos = (
+        base["Custo com impostos"]
+        if "Custo com impostos" in base.columns
+        else pd.Series(0.0, index=base.index)
+    )
+    reparacoes = (
+        base["Reparações no período"]
+        if "Reparações no período" in base.columns
+        else pd.Series(0.0, index=base.index)
+    )
+
+    work = pd.DataFrame(
+        {
+            "Grupo": (
+                grupos.astype("string")
+                .fillna("")
+                .str.strip()
+                .str.casefold()
+                .map({"comprado": "Comprado", "frota": "Frota"})
+            ),
+            "Modelo": (
+                modelos.astype("string")
+                .fillna("Não identificado")
+                .str.strip()
+                .replace("", "Não identificado")
+            ),
+            "Custo com impostos": pd.to_numeric(
+                custos, errors="coerce"
+            ).fillna(0.0),
+            "Reparações": pd.to_numeric(
+                reparacoes, errors="coerce"
+            ).fillna(0.0),
+        }
+    ).dropna(subset=["Grupo"])
+
+    resumo_grupos = (
+        work.groupby("Grupo")
+        .agg(
+            Máquinas=("Grupo", "size"),
+            **{
+                "Reparações": ("Reparações", "sum"),
+                "Custo com impostos": ("Custo com impostos", "sum"),
+            },
+        )
+        .reindex(["Comprado", "Frota"], fill_value=0)
+        .reset_index()
+    )
+    custos_modelo = (
+        work.groupby(["Modelo", "Grupo"], as_index=False)["Custo com impostos"]
+        .sum()
+        .sort_values("Custo com impostos", ascending=False)
+        .reset_index(drop=True)
+    )
+    quantidades_modelo = (
+        work.groupby(["Grupo", "Modelo"], as_index=False)
+        .size()
+        .rename(columns={"size": "Quantidade"})
+        .sort_values(["Grupo", "Quantidade", "Modelo"], ascending=[True, False, True])
+        .reset_index(drop=True)
+    )
+    reparacoes_modelo = (
+        work.groupby(["Modelo", "Grupo"], as_index=False)["Reparações"]
+        .sum()
+        .sort_values(["Modelo", "Grupo"])
+        .reset_index(drop=True)
+    )
+    return (
+        resumo_grupos,
+        custos_modelo,
+        quantidades_modelo,
+        reparacoes_modelo,
+    )
+
+
 def _analytical_table(base: pd.DataFrame, limit: int | None = None) -> pd.DataFrame:
+    # st.subheader('base', divider='red')
+    # st.dataframe(base)
+    # st.write(base.columns)
+    # st.write('Fim período sem custo (dias)' in base.columns)
     columns = [
+        "UF",
         "Número de Série",
         "Modelo",
         "Grupo",
+        "Data de Término do Contrato",
         "Idade atual",
         "Reparações no período",
         "Anos com reparação",
         "Custo com impostos",
+        "Garantia",
+        "Fim do período sem custo",
+        "Fim período sem custo (dias)",
         "Índice de prioridade",
         "Recomendação",
         "Motivo principal",
@@ -115,6 +236,7 @@ def _analytical_table(base: pd.DataFrame, limit: int | None = None) -> pd.DataFr
         column for column in columns if column in base.columns
     ]
     result = cast(pd.DataFrame, base[selected_columns]).copy()
+    result = result.rename(columns={"Idade atual": AGE_DISPLAY_COLUMN})
     if limit is not None:
         result = result.head(limit)
     return result
@@ -141,6 +263,7 @@ def _analytical_table_adm(
         "Percentil recorrência",
         "Custo com impostos",
         "Percentil custo",
+        "Fim período sem custo (dias)",
         "Índice de prioridade",
         "Recomendação",
         "Motivo principal",
@@ -149,6 +272,7 @@ def _analytical_table_adm(
         column for column in columns if column in base.columns
     ]
     result = cast(pd.DataFrame, base[selected_columns]).copy()
+    result = result.rename(columns={"Idade atual": AGE_DISPLAY_COLUMN})
     if limit is not None:
         result = result.head(limit)
     return result
@@ -157,13 +281,17 @@ def _analytical_table_adm(
 def _render_ranking(
     base: pd.DataFrame, limit: int | None = 12
 ) -> None:
+    # st.subheader('Contagem', divider='red')
+    # contagem_recomendacoes = base['Recomendação'].value_counts()
+    # st.write(contagem_recomendacoes)
+    # st.write('Fim período sem custo (dias)' in base.columns)
     st.markdown("#### Relação de máquinas com seus índices de prioridade")
     st.dataframe(
         _analytical_table(base, limit),
         hide_index=True,
         width="stretch",
         column_config={
-            "Idade atual": st.column_config.NumberColumn(format="%.1f anos"),
+            AGE_DISPLAY_COLUMN: st.column_config.NumberColumn(format="%.1f anos"),
             "Reparações no período": st.column_config.NumberColumn(format="%.0f"),
             "Anos com reparação": st.column_config.NumberColumn(format="%.0f"),
             "Custo com impostos": st.column_config.NumberColumn(format="R$ %.2f"),
@@ -174,6 +302,41 @@ def _render_ranking(
             ),
         },
     )
+
+    with st.expander(
+        "Como interpretar os critérios de recomendação",
+        expanded=False,
+        key="expander_criterios_recomendacao_ranking",
+    ):
+        st.markdown(
+            """
+            ### Como a recomendação é definida
+
+            A recomendação considera o **Índice de Prioridade**, a quantidade de
+            **reparações no período**, a **idade da máquina** e sua condição de
+            contrato. As regras são aplicadas na seguinte ordem:
+
+            - **Manter — Gestão de Frotas:** máquinas do grupo **Frota** com status
+              **Ativo** permanecem classificadas como Manter, independentemente do
+              índice.
+            - **Sem reparações no período:** máquinas com oito anos ou mais são
+              classificadas como **Monitorar**; abaixo dessa idade, como **Manter**.
+            - **Troca prioritária:** índice igual ou superior a **70** e pelo menos
+              **duas reparações** no período.
+            - **Planejar renovação:** índice igual ou superior a **50** que não
+              atenda aos critérios anteriores. Por isso, uma máquina com índice
+              acima de 70 e apenas uma reparação permanece nesta categoria.
+            - **Monitorar:** índice igual ou superior a **30** ou pelo menos duas
+              reparações, quando os critérios anteriores não forem atendidos.
+            - **Manter:** demais situações.
+
+            > **Importante:** o índice organiza a prioridade relativa dentro do
+            > parque filtrado, mas não determina a recomendação sozinho. Assim,
+            > uma máquina com índice maior pode receber uma recomendação menos
+            > urgente caso tenha menos reparações registradas no período.
+            """
+        )
+
     df = _analytical_table(base, limit)
     texto = f'''
         registros localizados
@@ -198,7 +361,7 @@ def _render_ranking_adm(
         width="stretch",
         column_config={
             "Data de compra": st.column_config.DateColumn(format="DD/MM/YYYY"),
-            "Idade atual": st.column_config.NumberColumn(format="%.1f anos"),
+            AGE_DISPLAY_COLUMN: st.column_config.NumberColumn(format="%.1f anos"),
             "Percentil idade": st.column_config.NumberColumn(format="percent"),
             "Reparações no período": st.column_config.NumberColumn(format="%.0f"),
             "Anos observados": st.column_config.NumberColumn(format="%.0f"),
@@ -260,12 +423,17 @@ def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
 
 def show() -> None:
 
+    # ========================================================
+    # region CONFERE DFs
+    # ========================================================
     if "df_pq" not in st.session_state:
         st.warning("Carregue os arquivos do parque de máquinas e os relatórios AMS.")
         return
     if st.session_state.df_pq.empty:
         st.warning("Não existem dados para geração do dashboard.")
         return
+    # endregion
+    # ========================================================
 
     df_dashboard = prepare_df()
 
@@ -368,6 +536,15 @@ def show() -> None:
         .map(lambda repaired: "Sim" if bool(repaired) else "Não")
     )
 
+    st.write(sorted(list(df_com_periodo.columns)))
+    st.dataframe(df_com_periodo[['Id','cliente', 'UF', 'Status de conciliação']])
+    st.write(len(df_com_periodo))
+
+    # bar = df_dashboard['Status de conciliação'].unique()
+    # st.write(bar) 
+    # df_foo = df_dashboard.copy()
+    # df_foo = df_foo[df_foo['Status de conciliação'] == 'Somente no AMS'].reset_index(drop=True)
+    # st.dataframe(df_foo)
     
     df_filtrado, _ = dashboard_filters.aplicar_filtros(df_com_periodo)
 
@@ -433,9 +610,18 @@ def show() -> None:
         "Relatório PDF",
     ]
     if role == "adm":
-        tab_qualidade, *tabs = st.tabs(["Qualidade dos dados", *tab_names])
+        tab_qualidade, tab_grupos_adm, tab_decisao_renovacao, *tabs = st.tabs(
+            [
+                "Qualidade dos dados",
+                "Comprado x Frota",
+                "Decisão de renovação",
+                *tab_names,
+            ]
+        )
     else:
         tab_qualidade = None
+        tab_grupos_adm = None
+        tab_decisao_renovacao = None
         tabs = st.tabs(tab_names)
 
     tab_resumo, tab_modelos, tab_renovacao, tab_dados, tab_pdf = tabs
@@ -493,6 +679,151 @@ def show() -> None:
                 hide_index=True,
                 width="stretch",
             )
+
+    if tab_grupos_adm is not None:
+        with tab_grupos_adm:
+            (
+                resumo_grupos,
+                custos_modelo,
+                quantidades_modelo,
+                reparacoes_modelo,
+            ) = _dados_administrativos_grupos(base)
+            grupos = resumo_grupos.set_index("Grupo")
+
+            _render_small_cards(
+                [
+                    (
+                        "GRUPO COMPRADO",
+                        _numero(grupos.at["Comprado", "Máquinas"]),
+                        "Máquinas compradas no parque filtrado",
+                    ),
+                    (
+                        "GRUPO FROTA",
+                        _numero(grupos.at["Frota", "Máquinas"]),
+                        "Máquinas de Frota no parque filtrado",
+                    ),
+                    (
+                        "CUSTO — COMPRADOS",
+                        _moeda(grupos.at["Comprado", "Custo com impostos"]),
+                        "Reparações com impostos",
+                    ),
+                    (
+                        "CUSTO — FROTA",
+                        _moeda(grupos.at["Frota", "Custo com impostos"]),
+                        "Reparações com impostos",
+                    ),
+                ]
+            )
+            st.space(4)
+
+            maquinas_compradas = _as_float(grupos.at["Comprado", "Máquinas"])
+            maquinas_frota = _as_float(grupos.at["Frota", "Máquinas"])
+            reparacoes_compradas = _as_float(
+                grupos.at["Comprado", "Reparações"]
+            )
+            reparacoes_frota = _as_float(grupos.at["Frota", "Reparações"])
+            custo_comprados = _as_float(
+                grupos.at["Comprado", "Custo com impostos"]
+            )
+            custo_frota = _as_float(
+                grupos.at["Frota", "Custo com impostos"]
+            )
+            reparacoes_por_maquina_comprada = (
+                reparacoes_compradas / maquinas_compradas
+                if maquinas_compradas
+                else 0.0
+            )
+            reparacoes_por_maquina_frota = (
+                reparacoes_frota / maquinas_frota if maquinas_frota else 0.0
+            )
+            custo_por_maquina_comprada = (
+                custo_comprados / maquinas_compradas if maquinas_compradas else 0.0
+            )
+            custo_por_maquina_frota = (
+                custo_frota / maquinas_frota if maquinas_frota else 0.0
+            )
+            custo_total_grupos = custo_comprados + custo_frota
+            participacao_custo_comprados = (
+                custo_comprados / custo_total_grupos if custo_total_grupos else 0.0
+            )
+            participacao_custo_frota = (
+                custo_frota / custo_total_grupos if custo_total_grupos else 0.0
+            )
+
+            _render_comparison_cards(
+                [
+                    (
+                        "REPARAÇÕES POR MÁQUINA",
+                        (
+                            f"Comprado: {_numero(reparacoes_por_maquina_comprada, 2)}"
+                            f" | Frota: {_numero(reparacoes_por_maquina_frota, 2)}"
+                        ),
+                        _texto_variacao_frota(
+                            reparacoes_por_maquina_comprada,
+                            reparacoes_por_maquina_frota,
+                        ),
+                    ),
+                    (
+                        "CUSTO DE REPARAÇÃO POR MÁQUINA",
+                        (
+                            f"Comprado: {_moeda(custo_por_maquina_comprada)}"
+                            f" | Frota: {_moeda(custo_por_maquina_frota)}"
+                        ),
+                        _texto_variacao_frota(
+                            custo_por_maquina_comprada,
+                            custo_por_maquina_frota,
+                        ),
+                    ),
+                    (
+                        "PARTICIPAÇÃO NO CUSTO DE REPARAÇÕES",
+                        (
+                            f"Comprado: {_percentual(participacao_custo_comprados)}"
+                            f" | Frota: {_percentual(participacao_custo_frota)}"
+                        ),
+                        "Distribuição do custo entre os dois grupos",
+                    ),
+                ]
+            )
+            st.space(4)
+
+            maquinas_col, reparacoes_col = st.columns(2)
+            with maquinas_col:
+                st.plotly_chart(
+                    dashboard_charts.grafico_quantidade_por_grupo_e_modelo(
+                        quantidades_modelo
+                    ),
+                    width="stretch",
+                )
+            with reparacoes_col:
+                st.plotly_chart(
+                    dashboard_charts.grafico_reparacoes_por_modelo_e_grupo(
+                        reparacoes_modelo
+                    ),
+                    width="stretch",
+                )
+
+            with maquinas_col:
+                st.plotly_chart(
+                    dashboard_charts.grafico_custo_reparacoes_por_grupo(
+                        resumo_grupos
+                    ),
+                    width="stretch",
+                )
+
+            with reparacoes_col:
+                st.plotly_chart(
+                    dashboard_charts.grafico_custo_reparacoes_por_modelo(
+                        custos_modelo
+                    ),
+                    width="stretch",
+                )
+
+    if tab_decisao_renovacao is not None:
+        with tab_decisao_renovacao:
+            with st.container(key="renewal_decision_tab"):
+                fleet_renewal.show()
+
+
 
     with tab_resumo:
         idade_maxima = max(0, _as_int(base["Idade atual"].fillna(0).max()))
@@ -897,7 +1228,7 @@ def show() -> None:
             hide_index=True,
             width="stretch",
             column_config={
-                "Idade atual": st.column_config.NumberColumn(format="%.1f anos"),
+                AGE_DISPLAY_COLUMN: st.column_config.NumberColumn(format="%.1f anos"),
                 "Reparações no período": st.column_config.NumberColumn(format="%.0f"),
                 "Anos com reparação": st.column_config.NumberColumn(format="%.0f"),
                 "Custo com impostos": st.column_config.NumberColumn(format="R$ %.2f"),
@@ -938,7 +1269,7 @@ def show() -> None:
             )
 
     with tab_dados:
-        display = base.copy()
+        display = base.rename(columns={"Idade atual": AGE_DISPLAY_COLUMN}).copy()
         default_columns = [
             "Número de Série",
             "Razão Social",
@@ -946,7 +1277,7 @@ def show() -> None:
             "Grupo",
             "Status da Ferramenta",
             "Data de compra",
-            "Idade atual",
+            AGE_DISPLAY_COLUMN,
             "Reparações no período",
             "Custo com impostos",
             "Pago pelo cliente com impostos",

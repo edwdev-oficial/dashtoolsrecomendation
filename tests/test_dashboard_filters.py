@@ -1,7 +1,9 @@
 from datetime import date
+from types import SimpleNamespace
 
 import pandas as pd
 
+from dashtoolsrecomendation.components import dashboard_filters
 from dashtoolsrecomendation.components.dashboard_filters import (
     aplicar_selecoes,
     filtrar_termino_contrato,
@@ -92,3 +94,68 @@ def test_filtro_de_contrato_pode_incluir_frota_sem_data() -> None:
     )
 
     assert result["id"].tolist() == [1, 3, 4, 5]
+
+
+def test_tipo_nao_reduz_faixa_de_datas_do_filtro_contratual(monkeypatch) -> None:
+    base = pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "Tipo": ["Ferramenta", "Ferramenta", "AcessÃ³rio"],
+            "Grupo": ["Frota", "Frota", "Frota"],
+            "Data de TÃ©rmino do Contrato": [
+                "2026-01-01",
+                "2027-01-01",
+                "2025-01-01",
+            ],
+        }
+    )
+    captured: dict[str, pd.DataFrame] = {}
+
+    class SidebarStub:
+        def markdown(self, *_args, **_kwargs) -> None:
+            pass
+
+        def button(self, *_args, **_kwargs) -> bool:
+            return False
+
+        def caption(self, *_args, **_kwargs) -> None:
+            pass
+
+    streamlit_stub = SimpleNamespace(sidebar=SidebarStub(), session_state={})
+
+    def fake_create_filter(*, coluna, type, **_kwargs):
+        if coluna == "Tipo":
+            return "Ferramenta"
+        return [] if type == "multiselect" else ""
+
+    def capture_contract_options(df, grupo, *, options_df=None, **_kwargs):
+        del grupo
+        captured["filter"] = options_df.copy()
+        return df
+
+    def capture_description(options_df, _grupo):
+        captured["description"] = options_df.copy()
+        return None
+
+    monkeypatch.setattr(dashboard_filters, "st", streamlit_stub)
+    monkeypatch.setattr(
+        dashboard_filters.create_filter,
+        "create_filter",
+        fake_create_filter,
+    )
+    monkeypatch.setattr(
+        dashboard_filters,
+        "aplicar_filtro_termino_contrato",
+        capture_contract_options,
+    )
+    monkeypatch.setattr(
+        dashboard_filters,
+        "_contract_filter_description",
+        capture_description,
+    )
+
+    result, _ = dashboard_filters.aplicar_filtros(base)
+
+    assert result["id"].tolist() == [1, 2]
+    assert captured["filter"]["id"].tolist() == [1, 2, 3]
+    assert captured["description"]["id"].tolist() == [1, 2, 3]

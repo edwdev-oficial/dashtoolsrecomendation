@@ -7,7 +7,7 @@ from typing import BinaryIO, Iterable, Sequence
 
 import pandas as pd
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -47,7 +47,7 @@ WHITE = colors.white
 HERE = Path(__file__).resolve().parent
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 LOGO_PATH = ASSETS / "logoHilti.png"
-OUTPUT_FILENAME = "Manual_Metodologia_Indice_Prioridade_Renovacao_v2_gerado.pdf"
+OUTPUT_FILENAME = "Manual_Metodologia_Indice_Prioridade_Renovacao_v1.pdf"
 DEFAULT_OUTPUT = Path.home() / "Downloads" / OUTPUT_FILENAME
 
 
@@ -367,7 +367,7 @@ def make_table(
                 style.append(("BACKGROUND", (0, r), (-1, r), LIGHT))
     if aligns:
         for ci, al in enumerate(aligns):
-            style.append(("ALIGN", (ci, 1 if header else 0), (ci, -1), al))
+            style.append(("ALIGN", (ci, 0), (ci, -1), al))
     t.setStyle(TableStyle(style))
     _, h = t.wrapOn(c, sum(col_widths), PAGE_H)
     t.drawOn(c, x, PAGE_H - top - h)
@@ -543,7 +543,7 @@ def page_3(c: canvas.Canvas) -> None:
     data = [
         ["Informação", "Significado", "Uso no índice"],
         ["Número de série", "Identificador individual da máquina.", "Consolida todos os registros do mesmo\nativo."],
-        ["Idade atual", "Tempo desde a aquisição ou entrada em operação.", "Componente Idade - peso de 25%."],
+        ["Idade (anos)", "Tempo desde a aquisição ou entrada em operação.", "Componente Idade - peso de 25%."],
         ["Reparações no período", "Total de reparações observadas na janela escolhida.", "Base para a frequência."],
         ["Anos observados", "Anos da janela em que a máquina já existia.", "Evita penalizar de forma indevida máquinas\nrecentes."],
         ["Anos com reparação", "Quantidade de anos diferentes com ao menos uma ocorrência.", "Base para a recorrência."],
@@ -732,7 +732,7 @@ def page_6(c: canvas.Canvas, df: pd.DataFrame) -> None:
         size=8.8,
         leading=11,
     )
-    rows: list[list[object]] = [["Série", "Modelo", "Idade", "Reparos", "Anos obs.", "Anos c/ reparo", "Custo"]]
+    rows: list[list[object]] = [["Série", "Modelo", "Idade (anos)", "Reparações", "Anos obs.", "Anos c/ reparo", "Custo c/ impostos"]]
     for _, r in df.iterrows():
         rows.append(
             [
@@ -746,7 +746,7 @@ def page_6(c: canvas.Canvas, df: pd.DataFrame) -> None:
             ]
         )
     make_table(c, rows, MARGIN_X, 198, [65, 92, 50, 52, 70, 88, 94], 12, font_size=6.7, header_font_size=7.6,
-               aligns=["CENTER", "CENTER", "CENTER", "CENTER", "CENTER", "CENTER", "CENTER"])
+               aligns=["CENTER", "CENTER", "CENTER", "CENTER", "CENTER", "CENTER", "RIGHT"])
     draw_paragraph(c, "Leituras preliminares", MARGIN_X, 413, 300, size=14, bold=True)
     draw_bullets(
         c,
@@ -778,7 +778,7 @@ def page_7(c: canvas.Canvas, df: pd.DataFrame) -> None:
         leading=11,
     )
     ranked = df.sort_values("indice", ascending=False).reset_index(drop=True)
-    rows: list[list[object]] = [["Pos.", "Série", "Freq./ano", "Recorr.", "Custo", "Índice", "Recomendação"]]
+    rows: list[list[object]] = [["Pos.", "Série", "Freq./ano", "Recorr.", "Custo c/ impostos", "Índice", "Recomendação"]]
     for i, r in ranked.iterrows():
         rows.append(
             [
@@ -793,20 +793,56 @@ def page_7(c: canvas.Canvas, df: pd.DataFrame) -> None:
         )
     pdata: list[list[object]] = []
     head = ParagraphStyle("h7", fontName=FONT_BOLD, fontSize=7.6, leading=8, textColor=WHITE, alignment=TA_CENTER)
+    head_left = ParagraphStyle(
+        "h7-left",
+        parent=head,
+        alignment=TA_LEFT,
+    )
+    head_right = ParagraphStyle(
+        "h7-right",
+        parent=head,
+        alignment=TA_RIGHT,
+    )
     cell = ParagraphStyle("c7", fontName=FONT, fontSize=6.6, leading=7.5, textColor=DARK)
-    cell_bold_red = ParagraphStyle("r7", fontName=FONT_BOLD, fontSize=6.6, leading=7.5, textColor=RED)
+    cell_center = ParagraphStyle(
+        "c7-center",
+        parent=cell,
+        alignment=TA_CENTER,
+    )
+    cell_right = ParagraphStyle(
+        "c7-right",
+        parent=cell,
+        alignment=TA_RIGHT,
+    )
+    cell_bold_red = ParagraphStyle(
+        "r7",
+        fontName=FONT_BOLD,
+        fontSize=6.6,
+        leading=7.5,
+        textColor=RED,
+        alignment=TA_CENTER,
+    )
     for ri, row in enumerate(rows):
         rr = []
         for ci, v in enumerate(row):
             if ri == 0:
-                rr.append(Paragraph(str(v), head))
+                if ci == 4:
+                    rr.append(Paragraph(str(v), head_right))
+                elif ci == 6:
+                    rr.append(Paragraph(str(v), head_left))
+                else:
+                    rr.append(Paragraph(str(v), head))
             elif ci == 5 and ri <= 4:
                 rr.append(Paragraph(str(v), cell_bold_red))
+            elif ci == 4:
+                rr.append(Paragraph(str(v), cell_right))
+            elif ci in {0, 1, 2, 3, 5}:
+                rr.append(Paragraph(str(v), cell_center))
             else:
                 rr.append(Paragraph(str(v), cell))
         pdata.append(rr)
     make_table(c, pdata, MARGIN_X, 195, [32, 65, 65, 60, 80, 55, 154], 11.8, font_size=6.6, header_font_size=7.6,
-               aligns=["CENTER", "CENTER", "CENTER", "CENTER", "CENTER", "CENTER", "LEFT"])
+               aligns=["CENTER", "CENTER", "CENTER", "CENTER", "RIGHT", "CENTER", "LEFT"])
     draw_info_box(
         c,
         MARGIN_X,
@@ -835,7 +871,7 @@ def page_8(c: canvas.Canvas, df: pd.DataFrame) -> None:
     )
     rows = [
         ["Dado", "Valor", "Interpretação"],
-        ["Idade atual", "9,8 anos", "Maior idade da base fictícia."],
+        ["Idade (anos)", "9,8 anos", "Maior idade da base fictícia."],
         ["Reparações no período", "5", "Ocorrências distribuídas na janela analisada."],
         ["Anos observados", "3", "Máquina presente em toda a janela."],
         ["Frequência observada", "5 / 3 = 1,67", "Empatada com a maior frequência."],

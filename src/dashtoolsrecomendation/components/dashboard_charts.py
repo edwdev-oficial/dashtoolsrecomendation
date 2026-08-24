@@ -20,6 +20,13 @@ RECOMMENDATION_COLORS = {
 }
 
 
+def _intervalo_eixo_quantidade(values: pd.Series) -> int:
+    quantidade_maxima = int(
+        pd.to_numeric(values, errors="coerce").fillna(0).max()
+    )
+    return max(5, 5 * max(1, (quantidade_maxima + 29) // 30))
+
+
 def configurar_layout(fig: Figure, altura: int = 330) -> Figure:
     fig.update_layout(
         height=altura,
@@ -346,6 +353,169 @@ def grafico_idade_media_modelo(df: pd.DataFrame) -> Figure:
     )
 
 
+def grafico_custo_reparacoes_por_modelo(df: pd.DataFrame) -> Figure:
+    totais = (
+        df.groupby("Modelo")["Custo com impostos"]
+        .sum()
+        .sort_values(ascending=True)
+    )
+    ordem_modelos = totais.index.tolist()
+    data = df.copy()
+    fig = px.bar(
+        data,
+        x="Custo com impostos",
+        y="Modelo",
+        orientation="h",
+        color="Grupo",
+        text="Custo com impostos",
+        title="Custo de reparações com impostos por modelo",
+        labels={
+            "Modelo": "",
+            "Grupo": "Grupo",
+            "Custo com impostos": "Custo de reparações",
+        },
+        category_orders={
+            "Modelo": ordem_modelos,
+            "Grupo": ["Comprado", "Frota"],
+        },
+        color_discrete_map={"Comprado": RED, "Frota": BEIGE},
+        barmode="stack",
+    )
+    fig.update_traces(
+        texttemplate="R$ %{text:,.0f}",
+        textposition="inside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{y}</b><br>Grupo: %{fullData.name}"
+            "<br>Custo de reparações: R$ %{x:,.2f}<extra></extra>"
+        ),
+    )
+    fig.update_xaxes(tickprefix="R$ ", separatethousands=True)
+    altura = max(380, min(800, 30 * len(ordem_modelos) + 120))
+    configurar_layout(fig, altura=altura)
+    fig.update_layout(
+        legend=dict(y=-0.34, yanchor="top"),
+        margin=dict(l=20, r=20, t=45, b=90),
+    )
+    return fig
+
+
+def grafico_custo_reparacoes_por_grupo(df: pd.DataFrame) -> Figure:
+    fig = px.bar(
+        df,
+        x="Grupo",
+        y="Custo com impostos",
+        color="Grupo",
+        text="Custo com impostos",
+        title="Comparativo do custo de reparações por grupo",
+        labels={"Grupo": "", "Custo com impostos": "Custo de reparações"},
+        color_discrete_map={"Comprado": RED, "Frota": BEIGE},
+    )
+    fig.update_traces(
+        texttemplate="R$ %{text:,.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x}</b><br>Custo de reparações: R$ %{y:,.2f}<extra></extra>"
+        ),
+    )
+    fig.update_yaxes(tickprefix="R$ ", separatethousands=True)
+    fig.update_layout(showlegend=False)
+    return configurar_layout(fig, altura=380)
+
+
+def grafico_quantidade_por_grupo_e_modelo(df: pd.DataFrame) -> Figure:
+    totais_modelo = (
+        df.groupby("Modelo")["Quantidade"].sum().sort_values(ascending=False)
+    )
+    intervalo_eixo_y = _intervalo_eixo_quantidade(df["Quantidade"])
+    fig = px.bar(
+        df,
+        x="Modelo",
+        y="Quantidade",
+        color="Grupo",
+        text="Quantidade",
+        barmode="group",
+        title="Quantidade de máquinas por modelo e grupo",
+        labels={
+            "Modelo": "Modelo",
+            "Grupo": "Grupo",
+            "Quantidade": "Quantidade de máquinas",
+        },
+        category_orders={
+            "Modelo": totais_modelo.index.tolist(),
+            "Grupo": ["Comprado", "Frota"],
+        },
+        color_discrete_map={"Comprado": RED, "Frota": BEIGE},
+    )
+    fig.update_traces(
+        texttemplate="%{text:,.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x}</b><br>Grupo: %{fullData.name}"
+            "<br>Quantidade: %{y:,.0f}<extra></extra>"
+        ),
+    )
+    fig.update_xaxes(tickangle=0)
+    fig.update_yaxes(
+        dtick=intervalo_eixo_y,
+        tickangle=0,
+        title_text="Quantidade de máquinas",
+    )
+    configurar_layout(fig, altura=430)
+    fig.update_layout(
+        legend=dict(y=-0.38, yanchor="top"),
+        margin=dict(l=20, r=20, t=45, b=130),
+    )
+    return fig
+
+
+def grafico_reparacoes_por_modelo_e_grupo(df: pd.DataFrame) -> Figure:
+    totais_modelo = (
+        df.groupby("Modelo")["Reparações"].sum().sort_values(ascending=False)
+    )
+    fig = px.bar(
+        df,
+        x="Modelo",
+        y="Reparações",
+        color="Grupo",
+        text="Reparações",
+        barmode="group",
+        title="Quantidade de reparações por modelo e grupo",
+        labels={
+            "Modelo": "Modelo",
+            "Grupo": "Grupo",
+            "Reparações": "Quantidade de reparações",
+        },
+        category_orders={
+            "Modelo": totais_modelo.index.tolist(),
+            "Grupo": ["Comprado", "Frota"],
+        },
+        color_discrete_map={"Comprado": RED, "Frota": BEIGE},
+    )
+    fig.update_traces(
+        texttemplate="%{text:,.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x}</b><br>Grupo: %{fullData.name}"
+            "<br>Reparações: %{y:,.0f}<extra></extra>"
+        ),
+    )
+    fig.update_xaxes(tickangle=0)
+    fig.update_yaxes(
+        dtick=_intervalo_eixo_quantidade(df["Reparações"]),
+        tickangle=0,
+    )
+    configurar_layout(fig, altura=430)
+    fig.update_layout(
+        legend=dict(y=-0.38, yanchor="top"),
+        margin=dict(l=20, r=20, t=45, b=130),
+    )
+    return fig
+
+
 def grafico_composicao_custo_ams(df: pd.DataFrame) -> Figure:
     fig = px.pie(
         df,
@@ -379,7 +549,7 @@ def grafico_reparacoes_por_maquina_faixa(df: pd.DataFrame) -> Figure:
         text="Reparações por máquina",
         title="Frequência observada por faixa etária",
         labels={
-            "Faixa etária": "Idade atual (anos)",
+            "Faixa etária": "Idade Atual (anos)",
             "Reparações por máquina": "Reparações por máquina",
         },
         color="Faixa etária",
@@ -407,7 +577,7 @@ def grafico_reparacoes_por_maquina_faixa2(df: pd.DataFrame) -> Figure:
         text="Reparações por máquina",
         title="Frequência observada por faixa etária2",
         labels={
-            "Faixa etária": "Idade atual (anos)",
+            "Faixa etária": "Idade Atual (anos)",
             "Reparações por máquina": "Reparações por máquina",
         },
         color="Faixa etária",
@@ -435,7 +605,7 @@ def grafico_custo_por_maquina_faixa(df: pd.DataFrame) -> Figure:
         text="Custo por máquina",
         title="Custo observado por máquina e faixa etária",
         labels={
-            "Faixa etária": "Idade atual (anos)",
+            "Faixa etária": "Idade Atual (anos)",
             "Custo por máquina": "Custo por máquina",
         },
         color="Faixa etária",
@@ -479,7 +649,7 @@ def grafico_matriz_prioridade(df: pd.DataFrame) -> Figure:
         title="Matriz de prioridade de renovação",
         subtitle="Eixo X: idade atual | Eixo Y: reparações no período | Tamanho da bolha: custo com impostos",
         labels={
-            "Idade atual": "Idade atual (anos)",
+            "Idade atual": "Idade Atual (anos)",
             "Reparações no período": "Reparações registradas no período",
             "Recomendação": "Recomendação",
         },
@@ -491,7 +661,7 @@ def grafico_matriz_prioridade(df: pd.DataFrame) -> Figure:
             "<b>%{hovertext}</b>"
             "<br>Nº de série: %{customdata[0]}"
             "<br>Recomendação: %{customdata[1]}"
-            "<br>Idade atual (anos): %{x:.1f}"
+            "<br>Idade Atual (anos): %{x:.1f}"
             "<br>Reparações registradas no período: %{y:,.0f}"
             "<br>Custo com impostos: R$ %{customdata[2]:,.2f}"
             "<br>Índice de prioridade: %{customdata[3]:.1f}"

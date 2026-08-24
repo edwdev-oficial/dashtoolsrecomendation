@@ -12,7 +12,7 @@ from PIL import Image, ImageChops
 from pypdf import PdfReader, PdfWriter
 from reportlab.lib import colors
 from reportlab.lib.colors import Color, HexColor
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.utils import ImageReader
@@ -31,7 +31,7 @@ PAGE_W, PAGE_H = A4
 LANDSCAPE_W, LANDSCAPE_H = landscape(A4)
 MARGIN = 50
 CONTENT_W = PAGE_W - 2 * MARGIN
-PDF_LAYOUT_VERSION = "hilti-brand-2026-08-v11-generated-methodology-annex"
+PDF_LAYOUT_VERSION = "hilti-brand-2026-08-v13-pdf-cost-right-alignment"
 
 RED = HexColor("#D2051E")
 DARK = HexColor("#524F53")
@@ -45,6 +45,10 @@ TAUPE = HexColor("#887F6E")
 GRID = HexColor("#D7D3CD")
 COVER_PANEL = HexColor("#F5F3F0")
 WHITE = colors.white
+PDF_CENTERED_TABLE_COLUMNS = frozenset(
+    {"Idade (anos)", "Reparações", "Anos c/ reparo", "Índice"}
+)
+PDF_RIGHT_TABLE_COLUMNS = frozenset({"Custo c/ impostos"})
 
 
 def _register_brand_fonts() -> None:
@@ -138,6 +142,22 @@ def _safe_text(value: object, default: str = "-") -> str:
         return default
     text = str(value).strip()
     return text or default
+
+
+def _pdf_table_column_alignments(
+    headers: Sequence[object],
+) -> list[str]:
+    """Define o alinhamento das colunas padronizadas das tabelas do PDF."""
+    alignments: list[str] = []
+    for header in headers:
+        label = _safe_text(header, "")
+        if label in PDF_CENTERED_TABLE_COLUMNS:
+            alignments.append("CENTER")
+        elif label in PDF_RIGHT_TABLE_COLUMNS:
+            alignments.append("RIGHT")
+        else:
+            alignments.append("LEFT")
+    return alignments
 
 
 def _trim_image_whitespace(image_bytes: bytes) -> bytes:
@@ -657,7 +677,7 @@ class _ReportRenderer:
             self.c.circle(px, py, radius, fill=1, stroke=0)
         self.c.setFillColor(MUTED)
         self.c.setFont("Helvetica", 6)
-        self.c.drawCentredString(plot_x + plot_w / 2, y + 4, "Idade atual (anos)")
+        self.c.drawCentredString(plot_x + plot_w / 2, y + 4, "Idade (anos)")
         self.c.saveState()
         self.c.translate(x + 7, plot_y + plot_h / 2)
         self.c.rotate(90)
@@ -706,18 +726,47 @@ class _ReportRenderer:
         row_padding: float = 2.2,
         max_height: float = 500,
         draw: bool = True,
+        column_alignments: Sequence[str] | None = None,
     ) -> float:
+        if column_alignments is None and header and rows:
+            column_alignments = _pdf_table_column_alignments(rows[0])
+        if column_alignments and len(column_alignments) != len(col_widths):
+            raise ValueError(
+                "A quantidade de alinhamentos deve corresponder às colunas da tabela."
+            )
+
+        alignment_codes = {
+            "LEFT": TA_LEFT,
+            "CENTER": TA_CENTER,
+            "RIGHT": TA_RIGHT,
+        }
         normalized: list[list[object]] = []
         for row_index, row in enumerate(rows):
-            style = self.table_header_style if header and row_index == 0 else self.table_style
-            normalized.append(
-                [
+            base_style = (
+                self.table_header_style
+                if header and row_index == 0
+                else self.table_style
+            )
+            normalized_row: list[object] = []
+            for column_index, cell in enumerate(row):
+                alignment = (
+                    column_alignments[column_index]
+                    if column_alignments
+                    else "LEFT"
+                )
+                if alignment not in alignment_codes:
+                    raise ValueError(f"Alinhamento de tabela inválido: {alignment}")
+                style = ParagraphStyle(
+                    f"{base_style.name}-{alignment.lower()}",
+                    parent=base_style,
+                    alignment=alignment_codes[alignment],
+                )
+                normalized_row.append(
                     Paragraph(escape(_safe_text(cell, "")), style)
                     if not isinstance(cell, Paragraph)
                     else cell
-                    for cell in row
-                ]
-            )
+                )
+            normalized.append(normalized_row)
         table = Table(normalized, colWidths=list(col_widths), repeatRows=1 if header else 0)
         table_style = [
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -729,6 +778,11 @@ class _ReportRenderer:
             ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
             ("FONTSIZE", (0, 0), (-1, -1), font_size),
         ]
+        if column_alignments:
+            for column_index, alignment in enumerate(column_alignments):
+                table_style.append(
+                    ("ALIGN", (column_index, 0), (column_index, -1), alignment)
+                )
         if header:
             table_style.extend(
                 [
@@ -1287,7 +1341,7 @@ class _ReportRenderer:
             title="Custo por máquina e modelo",
             currency=True,
         )
-        rows = [["Modelo", "Máquinas", "Reparações", "Custo", "Rep./máq.", "Custo/máq."]]
+        rows = [["Modelo", "Máquinas", "Reparações", "Custo c/ impostos", "Rep./máq.", "Custo/máq."]]
         for _, row in top.iterrows():
             rows.append(
                 [
@@ -1462,7 +1516,7 @@ class _ReportRenderer:
             f"{_number(self.data.cenario['maquinas'])} máquinas classificadas no cenário prioritário",
             title_size=24,
         )
-        rows = [["Série", "Modelo", "Idade", "Rep.", "Anos", "Custo", "Índice", "Motivo"]]
+        rows = [["Série", "Modelo", "Idade (anos)", "Reparações", "Anos c/ reparo", "Custo c/ impostos", "Índice", "Motivo"]]
         for _, row in self.data.selected.head(20).iterrows():
             rows.append(
                 [
@@ -2073,15 +2127,24 @@ class _ReportRenderer:
         rows = frame.head(7)
         row_h = table_h / 8
         columns = [0.23, 0.23, 0.16, 0.18, 0.20]
-        headers = ["Série", "Modelo", "Idade", "Índice", "Recomendação"]
+        headers = ["Série", "Modelo", "Idade (anos)", "Índice", "Recomendação"]
+        alignments = ["LEFT", "LEFT", "CENTER", "CENTER", "LEFT"]
         self.c.setFillColor(HexColor("#565159"))
         self.c.rect(table_x, table_y + 7 * row_h, table_w, row_h, fill=1, stroke=0)
         cursor = table_x
         self.c.setFillColor(WHITE)
         self.c.setFont("Helvetica-Bold", 3.6)
-        for header, fraction in zip(headers, columns):
-            self.c.drawString(cursor + 2, table_y + 7.35 * row_h, header)
-            cursor += table_w * fraction
+        for header, fraction, alignment in zip(headers, columns, alignments):
+            column_width = table_w * fraction
+            if alignment == "CENTER":
+                self.c.drawCentredString(
+                    cursor + column_width / 2,
+                    table_y + 7.35 * row_h,
+                    header,
+                )
+            else:
+                self.c.drawString(cursor + 2, table_y + 7.35 * row_h, header)
+            cursor += column_width
         for row_index, (_, row) in enumerate(rows.iterrows()):
             baseline = table_y + (6.3 - row_index) * row_h
             if row_index % 2:
@@ -2104,9 +2167,17 @@ class _ReportRenderer:
             cursor = table_x
             self.c.setFillColor(WHITE)
             self.c.setFont("Helvetica", 3.4)
-            for value, fraction in zip(values, columns):
-                self.c.drawString(cursor + 2, baseline, str(value)[:22])
-                cursor += table_w * fraction
+            for value, fraction, alignment in zip(values, columns, alignments):
+                column_width = table_w * fraction
+                if alignment == "CENTER":
+                    self.c.drawCentredString(
+                        cursor + column_width / 2,
+                        baseline,
+                        str(value)[:22],
+                    )
+                else:
+                    self.c.drawString(cursor + 2, baseline, str(value)[:22])
+                cursor += column_width
 
     def _snapshot_small_cards(
         self,
@@ -2847,7 +2918,7 @@ class _ReportRenderer:
         rows = [
             ["Informação", "Significado", "Uso no índice"],
             ["Número de série", "Identificador individual da máquina.", "Consolida os registros do ativo."],
-            ["Idade atual", "Tempo desde a aquisição ou entrada em operação.", "Idade - peso de 25%."],
+            ["Idade (anos)", "Tempo desde a aquisição ou entrada em operação.", "Idade - peso de 25%."],
             ["Reparações", "Total observado na janela escolhida.", "Base para a frequência."],
             ["Anos observados", "Anos da janela em que a máquina já existia.", "Evita penalizar máquinas recentes."],
             ["Anos com reparação", "Anos diferentes com ao menos uma ocorrência.", "Base para a recorrência."],
@@ -2960,7 +3031,7 @@ class _ReportRenderer:
             "Base inteiramente fictícia com 15 máquinas e janela máxima de três anos.",
         )
         rows = [
-            ["Série", "Modelo", "Idade", "Reparos", "Anos obs.", "Anos c/ reparo", "Custo"],
+            ["Série", "Modelo", "Idade (anos)", "Reparações", "Anos obs.", "Anos c/ reparo", "Custo c/ impostos"],
             ["900101", "TE-500", "9,8", "5", "3", "3", "R$ 7.200"],
             ["900102", "TE-500", "9,4", "4", "3", "3", "R$ 6.100"],
             ["900103", "TE-600", "7,2", "5", "3", "2", "R$ 8.600"],
@@ -3003,7 +3074,7 @@ class _ReportRenderer:
             title_size=21,
         )
         rows = [
-            ["Pos.", "Série", "Freq.", "Recorr.", "Custo", "Índice", "Recomendação", "Motivo principal"],
+            ["Pos.", "Série", "Freq.", "Recorr.", "Custo c/ impostos", "Índice", "Recomendação", "Motivo principal"],
             ["1", "900101", "1,67", "100%", "R$ 7.200", "91,4", "Troca prioritária", "Alta frequência e alto custo"],
             ["2", "900102", "1,33", "100%", "R$ 6.100", "82,1", "Troca prioritária", "Alta frequência e alto custo"],
             ["3", "900103", "1,67", "67%", "R$ 8.600", "80,0", "Troca prioritária", "Alta frequência e alto custo"],
@@ -3047,7 +3118,7 @@ class _ReportRenderer:
         )
         details = [
             ["Dado", "Valor", "Interpretação"],
-            ["Idade atual", "9,8 anos", "Maior idade da base fictícia."],
+            ["Idade (anos)", "9,8 anos", "Maior idade da base fictícia."],
             ["Reparações", "5", "Ocorrências distribuídas na janela."],
             ["Anos observados", "3", "Presente em toda a janela."],
             ["Frequência", "5 / 3 = 1,67", "Empatada com a maior frequência."],
@@ -3233,7 +3304,7 @@ class _ReportRenderer:
             "Número de série",
             "Modelo",
             "Grupo",
-            "Idade",
+            "Idade (anos)",
             "Reparações",
             "Anos c/ reparo",
             "Custo c/ impostos",

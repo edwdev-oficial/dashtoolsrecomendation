@@ -3,8 +3,24 @@ import streamlit as st
 from dataclasses import dataclass
 import numpy as np
 from typing import Any, cast
+from datetime import date
 
 from dashtoolsrecomendation import auth
+
+from dashtoolsrecomendation.services import (
+    dashboard_data,
+    get_data_ids,
+    renewal_analysis,
+    data_processing
+)
+
+from dashtoolsrecomendation.database.database import (
+    get_database
+)
+
+from dashtoolsrecomendation.components import (
+    create_filter
+)
 
 from dashtoolsrecomendation.utils import (
     download_xlsx,
@@ -12,6 +28,7 @@ from dashtoolsrecomendation.utils import (
     formatters,
 )
 
+from dashtoolsrecomendation.components import cards, dashboard_charts, dashboard_filters
 
 def _percentile_score(series: pd.Series) -> pd.Series:
     numeric = pd.to_numeric(series, errors="coerce").fillna(0)
@@ -461,3 +478,196 @@ def show():
     # endregion
     # ========================================================
     # indice_recomendacao_motivo()
+
+    # ========================================================
+    # region CHECK
+    # ========================================================
+    def check():
+        # st.write(st.session_state)
+
+        df_pq_row = st.session_state.df_pq.copy()
+
+        status = create_filter.create_filter(df_pq_row, 'Status da Ferramenta', 'Status', True, 'multiselect')
+        if status:
+            df_pq_row = df_pq_row[df_pq_row['Status da Ferramenta'].isin(status)]
+
+        linha = create_filter.create_filter(df_pq_row, 'Linha', 'Linha')
+        if linha:
+            df_pq_row = df_pq_row[df_pq_row['Linha'] == linha]
+        modelo = create_filter.create_filter(df_pq_row, 'Modelo', 'Modelo')
+        if modelo:
+            df_pq_row = df_pq_row[df_pq_row['Modelo'] == modelo]
+
+        grupo = create_filter.create_filter(df_pq_row, 'Grupo', 'Grupo', True, 'multiselect')
+        if status:
+            df_pq_row = df_pq_row[df_pq_row['Grupo'].isin(grupo)]            
+
+        st.write(modelo)
+
+        st.dataframe(df_pq_row)
+        st.write(len(df_pq_row))
+
+    # check()        
+    # endregion
+    # ========================================================
+
+    # ========================================================
+    # region DASHBOARD DATA
+    # ========================================================
+    
+    # def get():
+    #     db = get_database()
+    #     collection = db['ccs_sorocaba_brasilia_ids']
+    #     df = pd.DataFrame(collection.find().to_list())
+    #     df.rename(columns={'codClie': 'Id'}, inplace=True)
+    #     df['Id'] = df['Id'].astype(str).str.zfill(10)
+    #     return df[['Id', 'UF', 'cliente']]    
+
+    def foo():
+        def prepare_df() -> pd.DataFrame:
+            return dashboard_data.preparar_dashboard(
+                cast(pd.DataFrame, st.session_state.df_pq),
+                cast(pd.DataFrame, get_data_ids.get()),
+            )
+
+        def _anos_disponiveis(df_ams: pd.DataFrame) -> list[int]:
+
+            if df_ams.empty or "ano_reparo" not in df_ams.columns:
+                return []
+            anos_numericos = cast(
+                pd.Series,
+                pd.to_numeric(df_ams["ano_reparo"], errors="coerce"),
+            )
+            anos = (
+                anos_numericos
+                .dropna()
+                .astype(int)
+                .unique()
+                .tolist()
+            )
+            return sorted(
+                int(ano)
+                for ano in anos
+                if int(ano) >= renewal_analysis.ANALYSIS_START_YEAR
+            )
+
+
+        df_dashboard = prepare_df()
+
+        status_dashboard = ['']
+        values = sorted(list(df_dashboard['Status de conciliação'].unique()))
+        status_dashboard.extend(values)
+        status_option = st.multiselect('Staus dashboard', status_dashboard)
+        if status_option:
+            df_dashboard = df_dashboard[df_dashboard['Status de conciliação'].isin(status_option)]
+
+        st.write(f'df_dashboard com {len(df_dashboard)} registros')
+        st.dataframe(df_dashboard)
+
+        df_ams = st.session_state.get("df_ams", pd.DataFrame())
+
+        # status_ams = ['']
+        # values = sorted(list(df_ams['Status de conciliação'].unique()))
+        # status_ams.extend(values)
+        # status_option = st.multiselect('Staus dashboard', status_ams)
+        # if status_option:
+        #     df_dashboard = df_dashboard[df_dashboard['Status de conciliação'].isin(status_option)]
+
+        st.write(f'df_ams {len(df_ams)} registros')
+        st.dataframe(df_ams)
+
+        anos = _anos_disponiveis(df_ams)
+        if not anos:
+            st.warning(
+                f"A base AMS não possui registros a partir de "
+                f"{renewal_analysis.ANALYSIS_START_YEAR}. "
+                "O dashboard precisa dessa janela para a análise de manutenção."
+            )
+            return
+
+        st.sidebar.markdown("### Período observado")
+        anos_selecionados = st.sidebar.multiselect(
+            "Anos das reparações",
+            options=anos,
+            default=anos,
+            key="filtro_anos_ams",
+            help=(
+                f"A análise começa em {renewal_analysis.ANALYSIS_START_YEAR} porque "
+                "o histórico anterior não representa todas as manutenções "
+                "realizadas pelo cliente."
+            ),
+        )
+        if not anos_selecionados:
+            st.info("Selecione ao menos um ano de reparação.")
+            return
+
+        with st.sidebar.expander("Parâmetros da análise", expanded=False):
+            data_corte = st.date_input(
+                "Data de corte da base",
+                value=date.today(),
+                key="data_corte_dashboard",
+                help="Usada para calcular a idade atual e identificar ano parcial.",
+            )
+            fator_impostos = st.number_input(
+                "Fator sobre o Net Price",
+                min_value=1.0,
+                max_value=3.0,
+                value=renewal_analysis.DEFAULT_TAX_FACTOR,
+                step=0.05,
+                format="%.2f",
+                help="O projeto atual utiliza Net Price × 1,40.",
+            )
+            projetar_ano_parcial = st.toggle(
+                "Exibir projeção do ano parcial",
+                value=False,
+                help=(
+                    "A projeção anualiza o ritmo observado até a data de corte. "
+                    "É uma estimativa e não uma previsão de falhas."
+                ),
+            )
+
+        df_com_periodo = data_processing.preparacoes_por_ano(
+            df_dashboard,
+            df_ams,
+            anos_selecionados,
+        )
+        df_com_periodo["Quantidade de reparos"] = df_com_periodo["Reparos_no_período"]
+        df_com_periodo["# Reparos"] = df_com_periodo["Reparos_no_período"]
+        df_com_periodo["Custo de Reparos"] = df_com_periodo["Custo_no_período"]
+        df_com_periodo["Pago pelo Cliente"] = df_com_periodo["Pago_no_período"]
+        df_com_periodo["Economia"] = df_com_periodo["Economia_no_período"]                    
+        df_com_periodo["reparada"] = (
+            df_com_periodo["Reparos_no_período"]
+            .gt(0)
+            .map(lambda repaired: "Sim" if bool(repaired) else "Não")
+        )        
+
+        st.write(f'df_com_periodo: {len(df_com_periodo)} registros')
+        st.dataframe(df_com_periodo)
+
+
+        df_filtrado, _ = dashboard_filters.aplicar_filtros(df_com_periodo)
+        st.write(f'df_filtrado: {len(df_filtrado)} registros')
+        st.dataframe(df_filtrado)
+
+
+        if df_filtrado.empty:
+            st.info("Nenhuma máquina foi encontrada para os filtros selecionados.")
+            return
+
+
+        base = renewal_analysis.preparar_base_maquinas(
+            df_filtrado,
+            df_ams,
+            anos_selecionados,
+            data_corte=data_corte,
+            tax_factor=fator_impostos,
+        )
+        st.write(f'base: {len(base)} registros')
+        st.dataframe(base)
+
+
+
+    foo()
+    # endregion
+    # ========================================================

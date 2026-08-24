@@ -41,6 +41,145 @@ class DashboardDataTests(unittest.TestCase):
         self.assertEqual(result.loc[0, "Garantia"], "Não")
         self.assertEqual(result.loc[0, "Reparo Rejeitado"], "Sim")
 
+    def test_garantia_considera_reparo_de_comprado_e_status_roubado(self):
+        source = pd.DataFrame(
+            {
+                "Id": ["1", "2", "3", "4", "5"],
+                "Grupo": ["Comprado", "Comprado", "Frota", "Frota", "Comprado"],
+                "Último Reparo": [None, "01/06/2026", None, None, "01/06/2026"],
+                "Garantia": ["dentro", "dentro", "fora", "fora", "dentro"],
+                "Status da Ferramenta": [
+                    "Ativa",
+                    "Ativa",
+                    "Roubado",
+                    "Ativa",
+                    "  ROUBADO  ",
+                ],
+            }
+        )
+        ids = pd.DataFrame({"Id": source["Id"]})
+
+        result = preparar_dashboard(source, ids)
+
+        self.assertEqual(
+            result["Garantia"].tolist(),
+            ["Não", "Sim", "Não", "Sim", "Não"],
+        )
+
+    def test_garantia_trata_na_introduzido_pelo_merge(self):
+        source = pd.DataFrame({"Id": ["1"]})
+        ids = pd.DataFrame(
+            {
+                "Id": ["1"],
+                "Grupo": pd.Series([pd.NA], dtype="string"),
+                "Último Reparo": pd.Series([pd.NA], dtype="string"),
+                "Garantia": pd.Series([pd.NA], dtype="string"),
+                "Status da Ferramenta": pd.Series([pd.NA], dtype="string"),
+            }
+        )
+
+        result = preparar_dashboard(source, ids)
+
+        self.assertEqual(result.loc[0, "Garantia"], "Não")
+
+    def test_fim_periodo_futuro_fica_nulo_quando_nao_ha_garantia(self):
+        source = pd.DataFrame(
+            {
+                "Id": ["1", "2", "3", "4"],
+                "Grupo": ["Comprado", "Comprado", "Comprado", "Frota"],
+                "Último Reparo": [None, "01/06/2026", None, "01/06/2026"],
+                "Garantia": ["dentro", "dentro", "dentro", "dentro"],
+                "Status da Ferramenta": ["Ativa", "Ativa", "Ativa", "Roubado"],
+                "Data de Término do Contrato": ["", "", "", "05/08/2026"],
+                "Fim do período sem custo": [
+                    "01/08/2026",
+                    "01/08/2026",
+                    "19/07/2026",
+                    "valor substituído",
+                ],
+            }
+        )
+        ids = pd.DataFrame({"Id": source["Id"]})
+
+        result = preparar_dashboard(
+            source,
+            ids,
+            hoje=pd.Timestamp("2026-07-20"),
+        )
+
+        self.assertEqual(
+            result["Garantia"].tolist(),
+            ["Não", "Sim", "Não", "Não"],
+        )
+        self.assertIsNone(result.loc[0, "Fim do período sem custo"])
+        self.assertEqual(result.loc[1, "Fim do período sem custo"], "01/08/2026")
+        self.assertEqual(result.loc[2, "Fim do período sem custo"], "19/07/2026")
+        self.assertIsNone(result.loc[3, "Fim do período sem custo"])
+        self.assertEqual(
+            result["Fim período sem custo (dias)"].tolist(),
+            [0, 12, 0, 0],
+        )
+
+    def test_fim_periodo_sem_custo_usa_termino_apenas_para_frota(self):
+        source = pd.DataFrame(
+            {
+                "Id": ["1", "2", "3"],
+                "Grupo": ["Frota", "  FROTA  ", "Comprado"],
+                "Data de Término do Contrato": [
+                    "2027-01-10",
+                    "2027-02-20",
+                    "2027-03-30",
+                ],
+                "Fim do período sem custo": [
+                    "valor anterior 1",
+                    "valor anterior 2",
+                    "valor preservado",
+                ],
+            }
+        )
+        ids = pd.DataFrame({"Id": ["1", "2", "3"]})
+
+        result = preparar_dashboard(source, ids)
+
+        self.assertEqual(
+            result["Fim do período sem custo"].tolist(),
+            ["2027-01-10", "2027-02-20", "valor preservado"],
+        )
+
+    def test_fim_periodo_sem_custo_em_dias(self):
+        source = pd.DataFrame(
+            {
+                "Id": ["1", "2", "3", "4", "5"],
+                "Grupo": ["Frota", "Comprado", "Comprado", "Comprado", "Comprado"],
+                "Data de Término do Contrato": [
+                    "01/08/2026",
+                    "",
+                    "",
+                    "",
+                    "",
+                ],
+                "Fim do período sem custo": [
+                    "valor substituído",
+                    "19/07/2026",
+                    None,
+                    "",
+                    "20/07/2026",
+                ],
+            }
+        )
+        ids = pd.DataFrame({"Id": source["Id"]})
+
+        result = preparar_dashboard(
+            source,
+            ids,
+            hoje=pd.Timestamp("2026-07-20"),
+        )
+
+        self.assertEqual(
+            result["Fim período sem custo (dias)"].tolist(),
+            [12, 0, 0, 0, 0],
+        )
+
     def test_agregacoes_e_faixas(self):
         df = pd.DataFrame(
             {

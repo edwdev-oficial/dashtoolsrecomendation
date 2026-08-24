@@ -15,7 +15,7 @@ from dashtoolsrecomendation.reports import (
     gerar_manual_metodologia_pdf,
     gerar_relatorio_pdf,
 )
-from dashtoolsrecomendation.reports import generator_manual
+from dashtoolsrecomendation.reports import generator, generator_manual
 
 
 def _base_sintetica(quantidade: int = 35) -> pd.DataFrame:
@@ -86,6 +86,13 @@ def test_gerar_relatorio_pdf_retorna_pdf_valido() -> None:
     assert pdf.startswith(b"%PDF-")
     assert len(pdf) > 25_000
     assert b"%%EOF" in pdf[-2_048:]
+    texto = "\n".join(
+        page.extract_text() for page in PdfReader(BytesIO(pdf)).pages
+    )
+    assert "Idade (anos)" in texto
+    assert "Idade Atual (anos)" not in texto
+    assert "Anos c/ reparo" in texto
+    assert "Custo c/ impostos" in texto
 
 
 def test_config_rejeita_quantidade_invalida() -> None:
@@ -111,6 +118,26 @@ def test_config_rejeita_quantidade_invalida() -> None:
 
 def _quantidade_paginas(pdf: bytes) -> int:
     return len(re.findall(rb"/Type\s*/Page(?!s)", pdf))
+
+
+def test_alinhamentos_das_colunas_padronizadas_do_pdf() -> None:
+    headers = [
+        "Série",
+        "Idade (anos)",
+        "Reparações",
+        "Anos c/ reparo",
+        "Custo c/ impostos",
+        "Índice",
+    ]
+
+    assert generator._pdf_table_column_alignments(headers) == [
+        "LEFT",
+        "CENTER",
+        "CENTER",
+        "CENTER",
+        "RIGHT",
+        "CENTER",
+    ]
 
 
 def test_manual_metodologia_e_opcional_e_acrescenta_anexo_e() -> None:
@@ -171,6 +198,8 @@ def test_gerar_manual_metodologia_pdf_retorna_dez_paginas_validas() -> None:
     texto = "\n".join(page.extract_text() for page in gerado.pages)
     assert "MANUAL DE METODOLOGIA" in texto
     assert "EXEMPLOS DE INTERPRETAÇÃO" in texto
+    assert "Idade (anos)" in texto
+    assert "Idade Atual (anos)" not in texto
 
 
 def test_manual_metodologia_delega_para_o_gerador_em_codigo(monkeypatch) -> None:

@@ -268,6 +268,18 @@ div.st-key-expander_como_indice_eh_calculado details > summary svg {
     text-align: center;
 }
 
+.comparison-metric-value {
+    font-size: clamp(14px, 1.35vw, 20px);
+    white-space: nowrap;
+}
+
+.comparison-metric-card {
+    min-height: 138px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
 .dashboard-title {
     font-size: 34px;
     font-weight: 800;
@@ -491,6 +503,93 @@ div[data-testid="stMainBlockContainer"]:has(.st-key-aba_dashboard [data-testid="
 
 .method-note strong {
     color: var(--COLOR_WHITE);
+}
+
+/*
+ * A aba de decisão usa componentes nativos do tema claro sobre o fundo escuro
+ * do dashboard. O escopo por key evita alterar formulários, tabelas e alertas
+ * das demais páginas.
+ */
+.st-key-renewal_decision_tab [data-testid="stForm"],
+.st-key-renewal_decision_tab [data-testid="stExpander"] details {
+    background: rgba(255, 255, 255, 0.065) !important;
+    border-color: rgba(255, 255, 255, 0.26) !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stMetric"] {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 0.8rem 0.9rem;
+}
+
+.st-key-renewal_decision_tab [data-testid="stMetricLabel"],
+.st-key-renewal_decision_tab [data-testid="stMetricLabel"] *,
+.st-key-renewal_decision_tab [data-testid="stMetricValue"],
+.st-key-renewal_decision_tab [data-testid="stMetricValue"] *,
+.st-key-renewal_decision_tab [data-testid="stMetricDelta"],
+.st-key-renewal_decision_tab [data-testid="stMetricDelta"] * {
+    color: var(--COLOR_WHITE) !important;
+    -webkit-text-fill-color: var(--COLOR_WHITE) !important;
+    opacity: 1 !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stCaptionContainer"],
+.st-key-renewal_decision_tab [data-testid="stCaptionContainer"] *,
+.st-key-renewal_decision_tab [data-testid="stMarkdownContainer"] > p,
+.st-key-renewal_decision_tab [data-testid="stMarkdownContainer"] > ul,
+.st-key-renewal_decision_tab [data-testid="stMarkdownContainer"] > ol {
+    color: #f0f0f5 !important;
+    -webkit-text-fill-color: #f0f0f5 !important;
+    opacity: 1 !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stAlert"],
+.st-key-renewal_decision_tab [data-testid="stAlertContainer"] {
+    background: #343137 !important;
+    border: 1px solid rgba(255, 255, 255, 0.32) !important;
+    color: var(--COLOR_WHITE) !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stAlert"] *,
+.st-key-renewal_decision_tab [data-testid="stAlertContainer"] * {
+    color: var(--COLOR_WHITE) !important;
+    -webkit-text-fill-color: var(--COLOR_WHITE) !important;
+    opacity: 1 !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stExpander"] summary,
+.st-key-renewal_decision_tab [data-testid="stExpander"] summary *,
+.st-key-renewal_decision_tab [data-testid="stExpanderDetails"] {
+    color: var(--COLOR_WHITE) !important;
+    -webkit-text-fill-color: var(--COLOR_WHITE) !important;
+    opacity: 1 !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stTable"] {
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.st-key-renewal_decision_tab [data-testid="stSegmentedControl"] button {
+    background: #f5f3ef !important;
+    border-color: #d7cebd !important;
+    color: #2d2a2f !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stSegmentedControl"] button * {
+    color: #2d2a2f !important;
+    -webkit-text-fill-color: #2d2a2f !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+    background: var(--COLOR_RED) !important;
+    border-color: var(--COLOR_RED) !important;
+}
+
+.st-key-renewal_decision_tab [data-testid="stSegmentedControl"] button[aria-pressed="true"] * {
+    color: var(--COLOR_WHITE) !important;
+    -webkit-text-fill-color: var(--COLOR_WHITE) !important;
 }
 
 /* Mantém os KPIs legíveis quando seis cards são exibidos na mesma linha. */

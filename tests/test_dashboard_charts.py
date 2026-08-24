@@ -109,3 +109,96 @@ def test_custo_manutencoes_por_idade_soma_custos_da_mesma_idade() -> None:
     assert list(trace.y) == [350.0, 400.0]
     assert trace.texttemplate == "R$ %{text:,.0f}"
     assert figure.layout.title.text == "Custo de manutenções por idade"
+
+
+def test_custo_reparacoes_por_modelo_empilha_comprado_e_frota() -> None:
+    custos = pd.DataFrame(
+        {
+            "Modelo": ["TE 1", "TE 1", "TE 2"],
+            "Grupo": ["Comprado", "Frota", "Frota"],
+            "Custo com impostos": [400.0, 100.0, 250.0],
+        }
+    )
+
+    figure = dashboard_charts.grafico_custo_reparacoes_por_modelo(custos)
+    comprado, frota = figure.data
+
+    assert [comprado.name, frota.name] == ["Comprado", "Frota"]
+    assert list(comprado.y) == ["TE 1"]
+    assert list(comprado.x) == [400.0]
+    assert list(frota.y) == ["TE 1", "TE 2"]
+    assert list(frota.x) == [100.0, 250.0]
+    assert comprado.texttemplate == "R$ %{text:,.0f}"
+    assert figure.layout.barmode == "stack"
+    assert figure.layout.legend.y == -0.34
+    assert figure.layout.legend.yanchor == "top"
+    assert figure.layout.margin.b == 90
+
+
+def test_custo_reparacoes_por_grupo_compara_comprado_e_frota() -> None:
+    custos = pd.DataFrame(
+        {
+            "Grupo": ["Comprado", "Frota"],
+            "Máquinas": [2, 1],
+            "Custo com impostos": [400.0, 250.0],
+        }
+    )
+
+    figure = dashboard_charts.grafico_custo_reparacoes_por_grupo(custos)
+
+    assert [trace.name for trace in figure.data] == ["Comprado", "Frota"]
+    assert [float(trace.y[0]) for trace in figure.data] == [400.0, 250.0]
+    assert figure.layout.showlegend is False
+
+
+def test_quantidade_por_grupo_e_modelo_usa_barras_agrupadas() -> None:
+    quantidades = pd.DataFrame(
+        {
+            "Grupo": ["Comprado", "Frota", "Comprado", "Frota"],
+            "Modelo": ["TE 1", "TE 1", "TE 2", "TE 2"],
+            "Quantidade": [44, 46, 40, 12],
+        }
+    )
+
+    figure = dashboard_charts.grafico_quantidade_por_grupo_e_modelo(
+        quantidades
+    )
+    comprado, frota = figure.data
+
+    assert [comprado.name, frota.name] == ["Comprado", "Frota"]
+    assert list(comprado.x) == ["TE 1", "TE 2"]
+    assert list(comprado.y) == [44, 40]
+    assert list(frota.x) == ["TE 1", "TE 2"]
+    assert list(frota.y) == [46, 12]
+    assert figure.layout.barmode == "group"
+    assert figure.layout.xaxis.title.text == "Modelo"
+    assert figure.layout.xaxis.tickangle == 0
+    assert figure.layout.yaxis.dtick == 10
+    assert figure.layout.yaxis.tickangle == 0
+    assert figure.layout.yaxis.title.text == "Quantidade de máquinas"
+    assert figure.layout.legend.y == -0.38
+
+
+def test_reparacoes_por_modelo_e_grupo_usa_barras_agrupadas() -> None:
+    reparacoes = pd.DataFrame(
+        {
+            "Modelo": ["TE 1", "TE 1", "TE 2", "TE 2"],
+            "Grupo": ["Comprado", "Frota", "Comprado", "Frota"],
+            "Reparações": [35, 20, 10, 5],
+        }
+    )
+
+    figure = dashboard_charts.grafico_reparacoes_por_modelo_e_grupo(
+        reparacoes
+    )
+    comprado, frota = figure.data
+
+    assert [comprado.name, frota.name] == ["Comprado", "Frota"]
+    assert list(comprado.x) == ["TE 1", "TE 2"]
+    assert list(comprado.y) == [35, 10]
+    assert list(frota.x) == ["TE 1", "TE 2"]
+    assert list(frota.y) == [20, 5]
+    assert figure.layout.barmode == "group"
+    assert figure.layout.xaxis.tickangle == 0
+    assert figure.layout.yaxis.title.text == "Quantidade de reparações"
+    assert figure.layout.yaxis.dtick == 10
