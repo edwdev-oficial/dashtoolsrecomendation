@@ -523,7 +523,7 @@ def show():
     #     df['Id'] = df['Id'].astype(str).str.zfill(10)
     #     return df[['Id', 'UF', 'cliente']]    
 
-    def foo():
+    def analise_da_base_de_dados_do_dashboar():
         def prepare_df() -> pd.DataFrame:
             return dashboard_data.preparar_dashboard(
                 cast(pd.DataFrame, st.session_state.df_pq),
@@ -557,7 +557,7 @@ def show():
         status_dashboard = ['']
         values = sorted(list(df_dashboard['Status de conciliação'].unique()))
         status_dashboard.extend(values)
-        status_option = st.multiselect('Staus dashboard', status_dashboard)
+        status_option = st.multiselect('Status dashboard', status_dashboard)
         if status_option:
             df_dashboard = df_dashboard[df_dashboard['Status de conciliação'].isin(status_option)]
 
@@ -654,7 +654,9 @@ def show():
         if df_filtrado.empty:
             st.info("Nenhuma máquina foi encontrada para os filtros selecionados.")
             return
+        download_xlsx.download(df_filtrado, 'baixar_df_iltrado', 'df_filtrado')
 
+        st.divider()
 
         base = renewal_analysis.preparar_base_maquinas(
             df_filtrado,
@@ -663,11 +665,15 @@ def show():
             data_corte=data_corte,
             tax_factor=fator_impostos,
         )
+        series = create_filter.create_filter(base, 'Número de série', 'Número de série', False, 'multiselect')
+        if series:
+            base = base[base['Número de série'].isin(series)]
         st.write(f'base: {len(base)} registros')
         st.dataframe(base)
+        download_xlsx.download(base, 'baixar_base_tem_teste', 'dase')
 
 
 
-    foo()
+    analise_da_base_de_dados_do_dashboar()
     # endregion
     # ========================================================

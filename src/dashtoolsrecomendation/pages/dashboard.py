@@ -495,36 +495,6 @@ def show() -> None:
         anos_selecionados,
     )
 
-    # df_dashboard_filtrado = df_dashboard.copy()
-    # serie = st.text_input(
-    #     "Número de série para análise individual",)
-    # st.write(serie)
-    # if serie:
-    #     df_dashboard_filtrado = df_dashboard_filtrado[
-    #         (df_dashboard_filtrado['Número de série'] == serie)
-    #         |
-    #         (df_dashboard_filtrado['Número de Série'] == serie)
-    #     ]
-    #     st.dataframe(df_dashboard_filtrado, hide_index=True, width="stretch")
-
-    # st.subheader("Dashboard de análise de reparações", divider="red")
-    # df_com_periodo_filtrado = df_com_periodo.copy()
-    # serie = st.text_input(
-    #     "Número de série para análise individual2",)
-    # if serie:
-    #     df_com_periodo_filtrado = df_com_periodo_filtrado[
-    #         (df_com_periodo_filtrado['Número de série'] == serie)
-    #         |
-    #         (df_com_periodo_filtrado['Número de Série'] == serie)
-    #     ]
-    #     st.dataframe(df_com_periodo_filtrado, hide_index=True, width="stretch")
-    #     df_check = df_com_periodo_filtrado[['Reparos_no_período']]
-    #     st.dataframe(df_check, hide_index=True, width="stretch")
-    #     # st.dataframe(df_com_periodo_filtrado[['Reparos_no_período']], hide_index=True, width="stretch")
-    #     st.write('Reparos_no_período' in df_com_periodo_filtrado.columns)
-
-    # st.divider()
-
     df_com_periodo["Quantidade de reparos"] = df_com_periodo["Reparos_no_período"]
     df_com_periodo["# Reparos"] = df_com_periodo["Reparos_no_período"]
     df_com_periodo["Custo de Reparos"] = df_com_periodo["Custo_no_período"]
@@ -536,9 +506,9 @@ def show() -> None:
         .map(lambda repaired: "Sim" if bool(repaired) else "Não")
     )
 
-    st.write(sorted(list(df_com_periodo.columns)))
-    st.dataframe(df_com_periodo[['Id','cliente', 'UF', 'Status de conciliação']])
-    st.write(len(df_com_periodo))
+    # st.write(sorted(list(df_com_periodo.columns)))
+    # st.dataframe(df_com_periodo[['Id','cliente', 'UF', 'Status de conciliação']])
+    # st.write(len(df_com_periodo))
 
     # bar = df_dashboard['Status de conciliação'].unique()
     # st.write(bar) 

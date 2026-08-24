@@ -4,11 +4,8 @@ import pandas as pd
 
 
 AMS_GROUP_KEYS = [
-    # "Id",
-    "Material",
     "Número de Série",
-    "Data de compra",
-    # "ano_reparo"
+    "Modelo",
 ]
 
 
@@ -142,21 +139,27 @@ def preparar_sap_split(df: pd.DataFrame, serial_numbers: list[str] = [''], tool_
 
 
 def agrupar_ams(df: pd.DataFrame) -> pd.DataFrame:
+    group_keys = [
+        column for column in AMS_GROUP_KEYS if column in df.columns
+    ]
+    aggregations = {
+        "Id": "last",
+        "Razao Social": "first",
+        "Nome do Material": "first",
+        "FM Frota": "last",
+        "# Notif.": "sum",
+        "# Reparos": "sum",
+        "Custo de Reparos": "sum",
+        "Pagado pelo Cliente": "sum",
+        "Economia": "sum",
+    }
+    for column in ["Material", "Data de compra", "Tipo", "Linha"]:
+        if column in df.columns and column not in group_keys:
+            aggregations[column] = "last"
+
     result = (
-        df.groupby(AMS_GROUP_KEYS, as_index=False)
-        .agg(
-            {
-                "Id": "last",
-                "Razao Social": "first",
-                "Nome do Material": "first",
-                "FM Frota": "last",
-                "# Notif.": "sum",
-                "# Reparos": "sum",
-                "Custo de Reparos": "sum",
-                "Pagado pelo Cliente": "sum",
-                "Economia": "sum",
-            }
-        )
+        df.groupby(group_keys, as_index=False)
+        .agg(aggregations)
     )
     result["_presente_ams"] = True
     return result
@@ -201,9 +204,13 @@ def preparacoes_por_ano(
 
     ams = ams[ams["ano_reparo"].isin(anos)]
 
+    repair_keys = ["Número de Série"]
+    if "Modelo" in pq.columns and "Modelo" in ams.columns:
+        repair_keys.append("Modelo")
+
     reparos = (
         ams.dropna(subset=["Número de Série"])
-        .groupby("Número de Série", as_index=False)
+        .groupby(repair_keys, as_index=False)
         .agg(
             Reparos_no_período=("# Reparos", "sum"),
             Custo_no_período=("Custo de Reparos", "sum"),
@@ -214,7 +221,7 @@ def preparacoes_por_ano(
 
     resultado = pq.merge(
         reparos,
-        on="Número de Série",
+        on=repair_keys,
         how="left",
         validate="many_to_one",
         indicator="Situação_AMS",

@@ -162,6 +162,47 @@ class RenewalAnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(summary["reparacoes_por_maquina_parque"], 4 / 3)
         self.assertAlmostEqual(summary["custo"], 350 * 1.4)
 
+    def test_mesma_serie_em_modelos_diferentes_preserva_as_duas_maquinas(self):
+        parque = pd.DataFrame(
+            {
+                "Número de Série": ["99", "99"],
+                "Modelo": ["TE-7", "TE-700"],
+                "Grupo": ["Comprado", "Comprado"],
+                "Status da Ferramenta": ["Ativo", "Ativo"],
+                "Data de compra": ["2020-01-01", "2021-01-01"],
+            }
+        )
+        ams = pd.DataFrame(
+            {
+                "Número de Série": ["99", "99"],
+                "Modelo": ["TE-7", "TE-700"],
+                "ano_reparo": [2026, 2026],
+                "# Reparos": [2, 5],
+                "# Notif.": [3, 6],
+                "Custo de Reparos": [100.0, 900.0],
+                "Pagado pelo Cliente": [40.0, 500.0],
+                "Economia": [60.0, 400.0],
+            }
+        )
+
+        base = renewal_analysis.preparar_base_maquinas(
+            parque,
+            ams,
+            [2026],
+            data_corte=pd.Timestamp("2026-12-31"),
+            tax_factor=1,
+        ).set_index("Modelo")
+
+        self.assertEqual(len(base), 2)
+        self.assertEqual(base.loc["TE-7", "Reparações no período"], 2)
+        self.assertEqual(base.loc["TE-700", "Reparações no período"], 5)
+        self.assertEqual(base.loc["TE-7", "Custo líquido"], 100)
+        self.assertEqual(base.loc["TE-700", "Custo líquido"], 900)
+        self.assertEqual(
+            renewal_analysis.resumo_executivo(base.reset_index())["maquinas"],
+            2,
+        )
+
     def test_frota_ativa_tem_recomendacao_manter_independentemente_do_indice(self):
         parque = self.parque.copy()
         parque.loc[parque["Número de Série"].eq("1"), "Grupo"] = " Frota "
@@ -247,6 +288,33 @@ class RenewalAnalysisTests(unittest.TestCase):
         self.assertEqual(summary["somente_parque"], 1)
         self.assertEqual(summary["somente_ams"], 1)
         self.assertEqual(len(details), 4)
+
+    def test_reconciliacao_nao_confunde_modelos_com_a_mesma_serie(self):
+        parque = pd.DataFrame(
+            {
+                "Número de Série": ["99"],
+                "Modelo": ["TE-7"],
+                "_presente_parque": [True],
+            }
+        )
+        ams = pd.DataFrame(
+            {
+                "Número de Série": ["99"],
+                "Modelo": ["TE-700"],
+                "ano_reparo": [2026],
+            }
+        )
+
+        details, summary = renewal_analysis.reconciliar_fontes(
+            parque,
+            ams,
+            [2026],
+        )
+
+        self.assertEqual(summary["presentes_duas"], 0)
+        self.assertEqual(summary["somente_parque"], 1)
+        self.assertEqual(summary["somente_ams"], 1)
+        self.assertEqual(set(details["Modelo"]), {"TE-7", "TE-700"})
 
     def test_ano_parcial_pode_ser_projetado(self):
         annual = renewal_analysis.analise_anual(

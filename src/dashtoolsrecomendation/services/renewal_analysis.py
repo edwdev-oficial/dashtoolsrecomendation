@@ -11,6 +11,7 @@ import pandas as pd
 ANALYSIS_START_YEAR = 1900
 DEFAULT_TAX_FACTOR = 1.4
 SERIAL_COLUMNS = ("Número de Série", "Número de série")
+MODEL_KEY_COLUMN = "_Modelo chave"
 
 
 def _column(frame: pd.DataFrame, name: str) -> pd.Series:
@@ -90,6 +91,16 @@ def _text(df: pd.DataFrame, column: str, default: str = "") -> pd.Series:
         .str.strip()
         .replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
         .fillna(default)
+    )
+
+
+def _modelo_chave(modelos: pd.Series) -> pd.Series:
+    """Normaliza o modelo usado junto com a série para identificar a máquina."""
+    return (
+        modelos.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
     )
 
 
@@ -260,8 +271,13 @@ def preparar_base_maquinas(
 
     parque = df_parque.copy()
     parque["Número de Série"] = _serie_canonica(parque)
+    parque["Modelo"] = _text(parque, "Modelo", "Não identificado")
+    parque[MODEL_KEY_COLUMN] = _modelo_chave(_column(parque, "Modelo"))
     parque = parque.dropna(subset=["Número de Série"])
-    parque = parque.drop_duplicates("Número de Série", keep="last")
+    parque = parque.drop_duplicates(
+        ["Número de Série", MODEL_KEY_COLUMN],
+        keep="last",
+    )
 
     data_compra_origem = (
         _column(parque, "Data de compra")
@@ -278,7 +294,6 @@ def preparar_base_maquinas(
         idade_calculada.notna(), idade_existente
     ).clip(lower=0)
     parque["Data de compra"] = data_compra
-    parque["Modelo"] = _text(parque, "Modelo", "Não identificado")
     parque["Grupo"] = _text(parque, "Grupo", "Não informado")
     parque["Status da Ferramenta"] = _text(
         parque, "Status da Ferramenta", "Não informado"
@@ -294,12 +309,14 @@ def preparar_base_maquinas(
         anos_validos,
         series=_column(parque, "Número de Série"),
     )
+    ams[MODEL_KEY_COLUMN] = _modelo_chave(_column(ams, "Modelo"))
     ams["Tem reparo"] = ams["# Reparos"].gt(0)
 
     if ams.empty:
         aggregate = pd.DataFrame(
             columns=[
                 "Número de Série",
+                MODEL_KEY_COLUMN,
                 "Reparações no período",
                 "Notificações no período",
                 "Custo líquido",
@@ -314,7 +331,10 @@ def preparar_base_maquinas(
     else:
         aggregate = cast(
             pd.DataFrame,
-            ams.groupby("Número de Série", as_index=False)
+            ams.groupby(
+                ["Número de Série", MODEL_KEY_COLUMN],
+                as_index=False,
+            )
             .agg(
                 **{
                     "Reparações no período": ("# Reparos", "sum"),
@@ -347,7 +367,7 @@ def preparar_base_maquinas(
 
     result = parque.merge(
         aggregate,
-        on="Número de Série",
+        on=["Número de Série", MODEL_KEY_COLUMN],
         how="left",
         validate="one_to_one",
     )
@@ -411,6 +431,7 @@ def preparar_base_maquinas(
     result["Índice de prioridade"] = result["Índice de prioridade"].round(1)
     result["Recomendação"] = result.apply(_classificar_prioridade, axis=1)
     result["Motivo principal"] = result.apply(_motivo_principal, axis=1)
+    result = result.drop(columns=[MODEL_KEY_COLUMN])
 
     return result.sort_values(
         ["Índice de prioridade", "Custo com impostos", "Reparações no período"],
@@ -419,11 +440,7 @@ def preparar_base_maquinas(
 
 
 def resumo_executivo(base: pd.DataFrame) -> dict[str, float]:
-    maquinas = (
-        _as_int(_column(base, "Número de Série").nunique())
-        if not base.empty
-        else 0
-    )
+    maquinas = len(base)
     reparadas = (
         _as_int(_column(base, "Máquina reparada").sum())
         if not base.empty
@@ -489,7 +506,7 @@ def analise_faixas_idade(
     result = (
         work.groupby("Faixa etária", as_index=False)
         .agg(
-            Máquinas=("Número de Série", "nunique"),
+            Máquinas=("Número de Série", "size"),
             **{
                 "Máquinas reparadas": ("Máquina reparada", "sum"),
                 "Reparações": ("Reparações no período", "sum"),
@@ -695,6 +712,10 @@ def reconciliar_fontes(
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     dashboard = df_dashboard.copy()
     dashboard["Número de Série"] = _serie_canonica(dashboard)
+    dashboard["Modelo"] = _text(dashboard, "Modelo", "Não identificado")
+    dashboard[MODEL_KEY_COLUMN] = _modelo_chave(
+        _column(dashboard, "Modelo")
+    )
 
     if "_presente_parque" in dashboard.columns:
         presente_parque = (
@@ -711,22 +732,36 @@ def reconciliar_fontes(
     parque = cast(
         pd.DataFrame, dashboard.loc[presente_parque]
     ).dropna(subset=["Número de Série"])
-    parque_series = set(_column(parque, "Número de Série"))
+    parque_chaves = set(
+        zip(
+            _column(parque, "Número de Série"),
+            _column(parque, MODEL_KEY_COLUMN),
+        )
+    )
 
     ams = preparar_ams_periodo(df_ams, anos)
-    ams_series = set(_column(ams, "Número de Série").dropna())
-    union = sorted(parque_series | ams_series)
+    ams[MODEL_KEY_COLUMN] = _modelo_chave(_column(ams, "Modelo"))
+    ams = ams.dropna(subset=["Número de Série"])
+    ams_chaves = set(
+        zip(
+            _column(ams, "Número de Série"),
+            _column(ams, MODEL_KEY_COLUMN),
+        )
+    )
+    union = sorted(parque_chaves | ams_chaves)
 
     rows = []
     parque_indexado = cast(
         pd.DataFrame,
-        parque.drop_duplicates("Número de Série")
-        .set_index("Número de Série"),
+        parque.drop_duplicates(["Número de Série", MODEL_KEY_COLUMN])
+        .set_index(["Número de Série", MODEL_KEY_COLUMN]),
     )
     ams_indexado = cast(
         pd.DataFrame,
-        ams.drop_duplicates("Número de Série", keep="last")
-        .set_index("Número de Série"),
+        ams.drop_duplicates(
+            ["Número de Série", MODEL_KEY_COLUMN],
+            keep="last",
+        ).set_index(["Número de Série", MODEL_KEY_COLUMN]),
     )
     parque_modelos = (
         _column(parque_indexado, "Modelo")
@@ -739,18 +774,19 @@ def reconciliar_fontes(
         else pd.Series(dtype="object")
     )
 
-    for serie in union:
-        in_parque = serie in parque_series
-        in_ams = serie in ams_series
+    for serie, modelo_chave in union:
+        chave = (serie, modelo_chave)
+        in_parque = chave in parque_chaves
+        in_ams = chave in ams_chaves
         if in_parque and in_ams:
             status = "Presente nas duas fontes"
         elif in_parque:
             status = "Somente no parque atual"
         else:
             status = "Somente no AMS do período"
-        modelo = parque_modelos.get(serie, pd.NA)
+        modelo = parque_modelos.get(chave, pd.NA)
         if bool(pd.isna(cast(Any, modelo))) or not str(modelo).strip():
-            modelo = ams_modelos.get(serie, "Não identificado")
+            modelo = ams_modelos.get(chave, "Não identificado")
         rows.append(
             {
                 "Número de Série": serie,
@@ -761,11 +797,11 @@ def reconciliar_fontes(
 
     details = pd.DataFrame(rows)
     summary = {
-        "parque_atual": len(parque_series),
-        "ams_periodo": len(ams_series),
-        "presentes_duas": len(parque_series & ams_series),
-        "somente_parque": len(parque_series - ams_series),
-        "somente_ams": len(ams_series - parque_series),
-        "universo_conciliado": len(parque_series | ams_series),
+        "parque_atual": len(parque_chaves),
+        "ams_periodo": len(ams_chaves),
+        "presentes_duas": len(parque_chaves & ams_chaves),
+        "somente_parque": len(parque_chaves - ams_chaves),
+        "somente_ams": len(ams_chaves - parque_chaves),
+        "universo_conciliado": len(parque_chaves | ams_chaves),
     }
     return details, summary

@@ -377,12 +377,18 @@ def show():
             df_pq["_presente_parque"] = True
             df_ams_group["_presente_ams"] = True
 
+            merge_left_keys = ["Número de série"]
+            merge_right_keys = ["Número de Série"]
+            if "Modelo" in df_pq.columns and "Modelo" in df_ams_group.columns:
+                merge_left_keys.append("Modelo")
+                merge_right_keys.append("Modelo")
+
             df_merge = pd.merge(
                 df_pq,
                 df_ams_group,
                 how="outer",
-                left_on="Número de série",
-                right_on="Número de Série",
+                left_on=merge_left_keys,
+                right_on=merge_right_keys,
                 indicator="_origem_merge",
             )
             df_merge["_presente_parque"] = (
@@ -623,4 +629,3 @@ def show():
 
 # endregion
 # ========================================================
-
