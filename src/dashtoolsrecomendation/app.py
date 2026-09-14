@@ -9,6 +9,7 @@ from dashtoolsrecomendation.pages import (
     load_data,
     listas,
     dashboard,
+    base_sap,
     add_tlm,
     config,
     gerar_manual,
@@ -54,6 +55,12 @@ def main():
     }
 
     if auth.has_role('adm'):
+        pages['Detalhe série'] = {
+            'icon': 'search',
+            'title': 'Detalhamento nº Série',
+            'subtitle': 'Análise detalhada por equipamento',
+            'show': base_sap.show
+        }
         pages['Add TLM'] = {
             'icon': 'database-add',
             'title': 'Adicionar TLM',

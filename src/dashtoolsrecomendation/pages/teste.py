@@ -11,7 +11,9 @@ from dashtoolsrecomendation.services import (
     dashboard_data,
     get_data_ids,
     renewal_analysis,
-    data_processing
+    data_processing,
+    get_pq_normalizado2,
+    normalization
 )
 
 from dashtoolsrecomendation.database.database import (
@@ -36,7 +38,9 @@ def _percentile_score(series: pd.Series) -> pd.Series:
         return pd.Series(0.0, index=series.index)
     return numeric.rank(method="average", pct=True).fillna(0)
 
-
+def normalizar_itens(df):
+    df = get_pq_normalizado2.get(df)
+    return df, normalization.itens_nao_normalizados(df)
 
 def show():
     
@@ -110,6 +114,7 @@ def show():
         download_xlsx.download(serie_idade, 'foo', 'serie_idades')
     # endregion
     # ========================================================
+    # estudo_calculo_indice()
 
     # ========================================================
     # region ESTUDO DAS BASES
@@ -286,13 +291,75 @@ def show():
             st.dataframe(df_pq_not_in_filtrada)
 
         st.subheader('Máquinas do PQ que não estão no SAP Split', divider='red')
-        df_pq_not_in_split = compare_dfs(df_pq, df_sap_split, 'Modelo-Serie', 'Modelo-Serie')
-        st.dataframe(df_pq_not_in_split)
+        keys = st.session_state.keys()
+        keys_df = [k for k in keys if str(k).startswith('df')]
+        st.write(keys_df)
 
-        # 49417
+        df_pq_row = st.session_state.get('df_pq_row').copy()
+        df_pq_row = get_pq_normalizado2.get(df_pq_row)
+        df_pq_row['Modelo-Serie'] = (
+            df_pq_row['Modelo'] + ' - ' + df_pq_row['Número de série']
+        )
+        st.write('df_pq_row')
+        st.dataframe(df_pq_row)
+        df_config.footer_df(df_pq_row, 'registros')
+
+        df_sap_split_row = st.session_state.get('df_sap_split_row')
+
+
+        linha_cabecalho = df_sap_split_row.iloc[0]
+
+        novos_nomes = {
+            coluna_atual: novo_nome
+            for coluna_atual, novo_nome in linha_cabecalho.items()
+            if pd.notna(novo_nome) and str(novo_nome).strip() != ""
+        }
+
+        df_sap_split_row.rename(columns=novos_nomes, inplace=True)
+        df_sap_split_row.rename(columns={'Tool Type': 'Descrição'}, inplace=True)
+        df_sap_split_row = df_sap_split_row.iloc[2:].reset_index(drop=True)
+
+        df_sap_split_row, df_sap_split_row_not_normalizer = normalizar_itens(df_sap_split_row)
+
+        st.write('df_sap_split_row')
+        st.dataframe(df_sap_split_row)
+        df_config.footer_df(df_sap_split_row, 'registros')
+
+        df_vazias = df_sap_split_row[df_sap_split_row['Tipo'].isna()].reset_index(drop=True)
+        st.dataframe(df_vazias)
+
+        unicos = df_vazias['Descrição'].unique()
+
+        st.write(unicos)
+
+        st.dataframe(df_sap_split_row_not_normalizer)
+        st.session_state.df_descricoes_not_normalizer = pd.DataFrame({
+            'Descrição': sorted(df_sap_split_row_not_normalizer['Descrição'].dropna().unique())
+        })        
+
+        # df_pq_row_not_in_split = compare_dfs(df_pq_row, df_sap_split, 'Modelo-Serie', 'Modelo-Serie')
+        # df_pq_row_not_in_split = df_pq_row_not_in_split.reset_index(drop=True)
+        # st.write('df_pq_row_not_in_split')
+        # st.dataframe(df_pq_row_not_in_split)
+        # df_config.footer_df(df_pq_row_not_in_split, 'registros')
+
+        # df_sap_split_not_in_df_pq_row = compare_dfs(df_sap_split, df_pq_row, 'Modelo-Serie', 'Modelo-Serie')
+        # df_sap_split_not_in_df_pq_row = df_sap_split_not_in_df_pq_row.reset_index(drop=True)
+        # st.write('df_sap_split_not_in_df_pq_row')
+        # st.dataframe(df_sap_split_not_in_df_pq_row)
+        # df_config.footer_df(df_sap_split_not_in_df_pq_row, 'registros')
+
+        # # st.dataframe(df_pq)
+        # # df_pq.drop(columns=['Linha_x', 'Linha_y', 'Tipo_x', 'Tipo_y'], inplace=True)
+        # # colunas_df_pq = sorted(list(df_pq.columns))
+        # # st.write(colunas_df_pq)
+        # # df_pq_not_in_split = compare_dfs(df_pq, df_sap_split, 'Modelo-Serie', 'Modelo-Serie')
+        # # st.dataframe(df_pq_not_in_split)
+
+        # # 49417
     # endregion
     # ========================================================
-    # estudo_das_bases()
+    estudo_das_bases()
 
     # ========================================================
     # region PERCENTIL SCORE
@@ -507,9 +574,9 @@ def show():
         st.dataframe(df_pq_row)
         st.write(len(df_pq_row))
 
-    # check()        
     # endregion
     # ========================================================
+    # check()        
 
     # ========================================================
     # region DASHBOARD DATA
@@ -674,6 +741,6 @@ def show():
 
 
 
-    analise_da_base_de_dados_do_dashboar()
     # endregion
     # ========================================================
+    # analise_da_base_de_dados_do_dashboar()

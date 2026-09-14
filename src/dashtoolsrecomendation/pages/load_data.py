@@ -596,10 +596,11 @@ def show():
         # region DF_SAP_SPLIT
         # ========================================================
         if dfs_sap_split:
-            pass
             # df_sap_split = pd.concat(dfs_sap_split)
             serial_numbers = list(df_sap_group['Serial Number'].unique())
             tool_types = list(df_sap_group['Tool Type'].unique())
+            df_sap_split_row = pd.concat(dfs_sap_split)
+            st.session_state.df_sap_split_row = df_sap_split_row
             df_sap_split = data_processing.preparar_sap_split(pd.concat(dfs_sap_split), serial_numbers, tool_types)
             df_sap_split.rename(columns={'Tool Type': 'Descrição'}, inplace=True)
             df_sap_split, df_not_normalizer = normalizar_itens(df_sap_split)

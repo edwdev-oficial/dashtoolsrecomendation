@@ -8,6 +8,7 @@ from dashtoolsrecomendation.utils import loaders
 GRAPH_TITLES = {
     "Dashboard",
     "Dashboard 2",
+    "Detalhamento nº Série",
     "Carregar dados",
     "Listas",
     "Adicionar TLM",

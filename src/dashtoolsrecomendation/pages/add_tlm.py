@@ -61,3 +61,105 @@ def show():
 
         col.insert_many(itens_to_mongo)
         st.success('Dados inseridos com sucesso!')
+
+
+    st.subheader('Novo modo de noramlização', divider='red')
+
+    df_normal_itens = pd.DataFrame(col.find().to_list())
+    df_normal_itens.drop(['_id'], axis=1, inplace=True)
+    df_normal_itens['modelo_normalizer'] = (
+        df_normal_itens['Modelo']
+        .astype('string')
+        .str.upper()
+        .str.strip()
+        .str.replace(' ', '')
+        .str.replace('-', '')
+    )
+    df_normal_itens.rename(columns={'Descrição': 'r_descricao', 'Tipo': 'r_tipo', 'Linha': 'r_linha', 'Modelo': 'r_modelo'}, inplace=True)
+    st.dataframe(df_normal_itens)
+
+
+
+    df_not_normalizer['decricao_normalizer'] = (
+        df_not_normalizer["Descrição"]
+        .astype("string")
+        .str.upper()
+        .str.strip()
+        .str.replace(" ", "", regex=False)
+        .str.replace("-", "", regex=False)
+        .str.replace("AVR", "")
+    )
+
+    st.dataframe(df_not_normalizer)
+
+    df_merge = pd.merge(
+        df_not_normalizer,
+        df_normal_itens,
+        how='inner',
+        left_on='decricao_normalizer',
+        right_on='modelo_normalizer'
+    )
+
+    df_merge['Tipo'] = df_merge['r_tipo']
+    df_merge['Linha'] = df_merge['r_linha']
+    df_merge['Modelo'] = df_merge['r_modelo']
+
+    df_merge = df_merge[['Descrição', 'Tipo', 'Linha', 'Modelo']]
+
+    df_merge = df_merge.drop_duplicates()
+    df_merge = df_merge.reset_index(drop=True)
+
+    st.write('Se existirem dados neste df já podem ser normalizados')
+    st.dataframe(df_merge)
+
+    dictionary = df_merge.to_dict(orient='records')
+
+    # st.write(dictionary)
+
+    if st.button('Salvar este'):
+        col.insert_many(dictionary)
+        st.success('Dados salvos com sucesso')
+
+    st.subheader('Terceiro método', divider='red')
+
+    df_not_normalizer.drop(['decricao_normalizer'], axis=1, inplace=True)
+    data_filter = st.text_input('Descrição')
+
+
+    if data_filter:
+        df_not_normalizer = df_not_normalizer[df_not_normalizer['Descrição'].str.startswith(data_filter)]    
+
+    options_descriptions = df_not_normalizer['Descrição']
+    descricoes = st.multiselect('Descrições', options_descriptions)
+    if descricoes:
+        df_not_normalizer = df_not_normalizer[df_not_normalizer['Descrição'].isin(descricoes)]    
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        tipo = st.selectbox('Tipo', ['', 'Ferramenta', 'Acessório'])
+    with col2:
+        linhas = ['']
+        values = sorted(list(df_normal_itens['r_linha'].unique()))
+        linhas.extend(values)
+        linha = st.selectbox('Linha', linhas)
+    with col3:
+        modelo = st.text_input('Modelo')
+        
+    if tipo and linha:
+        df_not_normalizer['Tipo'] = tipo
+        df_not_normalizer['Linha'] = linha
+        df_not_normalizer['Modelo'] = df_not_normalizer['Descrição']
+
+    if modelo:
+        df_not_normalizer['Modelo'] = modelo
+
+    st.dataframe(df_not_normalizer)
+    if data_filter and tipo and linha:
+        if st.button('Salvar3'):
+            dictionary = df_not_normalizer.to_dict(orient='records')
+            col.insert_many(dictionary)
+            st.success('Dados inseridos com sucesso')
+            st.rerun()
+
+

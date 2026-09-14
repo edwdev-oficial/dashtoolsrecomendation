@@ -506,16 +506,6 @@ def show() -> None:
         .map(lambda repaired: "Sim" if bool(repaired) else "Não")
     )
 
-    # st.write(sorted(list(df_com_periodo.columns)))
-    # st.dataframe(df_com_periodo[['Id','cliente', 'UF', 'Status de conciliação']])
-    # st.write(len(df_com_periodo))
-
-    # bar = df_dashboard['Status de conciliação'].unique()
-    # st.write(bar) 
-    # df_foo = df_dashboard.copy()
-    # df_foo = df_foo[df_foo['Status de conciliação'] == 'Somente no AMS'].reset_index(drop=True)
-    # st.dataframe(df_foo)
-    
     df_filtrado, _ = dashboard_filters.aplicar_filtros(df_com_periodo)
 
     if df_filtrado.empty:
@@ -530,11 +520,6 @@ def show() -> None:
         data_corte=data_corte,
         tax_factor=fator_impostos,
     )
-
-    # st.subheader('DF BASE', divider='red')
-    # st.dataframe(df_filtrado)
-    # st.write('Índice de prioridade' in df_filtrado.columns)
-    # st.dataframe(base)
 
 
     if base.empty:
