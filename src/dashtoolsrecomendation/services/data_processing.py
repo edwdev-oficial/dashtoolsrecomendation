@@ -8,6 +8,9 @@ AMS_GROUP_KEYS = [
     "Modelo",
 ]
 
+AMS_ORIGIN_ID_COLUMN = "Id origem AMS"
+AMS_ORIGIN_NAME_COLUMN = "Razao Social origem AMS"
+
 
 def converter_datas(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     result = df.copy()
@@ -65,6 +68,168 @@ def preparar_parque(
     return df[output_columns].fillna("")
 
 
+def _ams_asset_keys(df: pd.DataFrame) -> list[str]:
+    keys = ["Número de Série"]
+    if "Modelo" in df.columns:
+        keys.append("Modelo")
+    elif "Nome do Material" in df.columns:
+        keys.append("Nome do Material")
+    return keys
+
+
+def _unique_non_empty(values: pd.Series) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if pd.isna(value):
+            continue
+        text = str(value).strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def detectar_series_multiconta(df: pd.DataFrame) -> pd.DataFrame:
+    """Return serial/model combinations linked to multiple AMS origin accounts."""
+    if df.empty or "Número de Série" not in df.columns:
+        return pd.DataFrame()
+
+    id_column = (
+        AMS_ORIGIN_ID_COLUMN
+        if AMS_ORIGIN_ID_COLUMN in df.columns
+        else "Id"
+    )
+    name_column = (
+        AMS_ORIGIN_NAME_COLUMN
+        if AMS_ORIGIN_NAME_COLUMN in df.columns
+        else "Razao Social"
+    )
+    if id_column not in df.columns:
+        return pd.DataFrame()
+
+    audit = df.copy()
+    audit["Número de Série"] = normalizar_numero_serie(audit["Número de Série"])
+    audit = audit.dropna(subset=["Número de Série"])
+    audit = audit[audit[id_column].notna()].copy()
+    if audit.empty:
+        return pd.DataFrame()
+
+    if name_column not in audit.columns:
+        audit[name_column] = ""
+
+    audit["_conta_origem"] = [
+        f"{account_id} - {account_name}" if account_name else account_id
+        for account_id, account_name in zip(
+            audit[id_column].astype("string").fillna("").str.strip(),
+            audit[name_column].astype("string").fillna("").str.strip(),
+        )
+    ]
+
+    group_keys = _ams_asset_keys(audit)
+    aggregations: dict[str, tuple[str, object]] = {
+        "qtd_ids": (id_column, "nunique"),
+        "ids": (id_column, _unique_non_empty),
+        "contas": ("_conta_origem", _unique_non_empty),
+    }
+    if "ano_reparo" in audit.columns:
+        audit["ano_reparo"] = pd.to_numeric(
+            audit["ano_reparo"], errors="coerce"
+        ).astype("Int64")
+        aggregations["primeiro_ano"] = ("ano_reparo", "min")
+        aggregations["ultimo_ano"] = ("ano_reparo", "max")
+
+    result = (
+        audit.groupby(group_keys, as_index=False, dropna=False)
+        .agg(**aggregations)
+    )
+    result = result[result["qtd_ids"] > 1].reset_index(drop=True)
+    return result
+
+
+
+def detectar_maquinas_duplicadas_parque(df: pd.DataFrame) -> pd.DataFrame:
+    """Return current-fleet machine keys that appear more than once.
+
+    The analytical unit is the machine, not machine-per-account. A duplicated
+    current-fleet key is therefore a data-quality conflict and must be resolved
+    before the Park x AMS merge.
+    """
+    if df.empty or "Número de série" not in df.columns:
+        return pd.DataFrame()
+
+    audit = df.copy()
+    audit["Número de série"] = normalizar_numero_serie(audit["Número de série"])
+    audit = audit.dropna(subset=["Número de série"])
+    if audit.empty:
+        return pd.DataFrame()
+
+    group_keys = ["Número de série"]
+    if "Modelo" in audit.columns:
+        group_keys.append("Modelo")
+    elif "Descrição" in audit.columns:
+        group_keys.append("Descrição")
+
+    if "Id" not in audit.columns:
+        audit["Id"] = ""
+    name_column = "Razao Social" if "Razao Social" in audit.columns else None
+    if name_column is None:
+        audit["_nome_conta_parque"] = ""
+        name_column = "_nome_conta_parque"
+
+    audit["_conta_parque"] = [
+        f"{account_id} - {account_name}" if account_name else account_id
+        for account_id, account_name in zip(
+            audit["Id"].astype("string").fillna("").str.strip(),
+            audit[name_column].astype("string").fillna("").str.strip(),
+        )
+    ]
+
+    result = (
+        audit.groupby(group_keys, as_index=False, dropna=False)
+        .agg(
+            qtd_registros=("Número de série", "size"),
+            qtd_ids=("Id", "nunique"),
+            ids=("Id", _unique_non_empty),
+            contas=("_conta_parque", _unique_non_empty),
+        )
+    )
+    return result[result["qtd_registros"] > 1].reset_index(drop=True)
+
+
+def consolidar_conta_atual(
+    df: pd.DataFrame,
+    *,
+    parque_id_column: str = "Id_x",
+    parque_name_column: str = "Razao Social_x",
+    ams_id_column: str = "Id_y",
+    ams_name_column: str = "Razao Social_y",
+) -> pd.DataFrame:
+    """Assign exactly one current account to each merged machine row.
+
+    Current Park is authoritative. AMS latest-account data is used only when a
+    machine is absent from the current Park. Id and customer name always come
+    from the same source row.
+    """
+    result = df.copy()
+
+    def _column_or_empty(column: str) -> pd.Series:
+        if column in result.columns:
+            return result[column]
+        return pd.Series(pd.NA, index=result.index, dtype="object")
+
+    parque_id = _column_or_empty(parque_id_column)
+    parque_name = _column_or_empty(parque_name_column)
+    ams_id = _column_or_empty(ams_id_column)
+    ams_name = _column_or_empty(ams_name_column)
+
+    parque_presente = parque_id.astype("string").fillna("").str.strip().ne("")
+
+    result["Id"] = ams_id
+    result["Razão Social"] = ams_name
+    result.loc[parque_presente, "Id"] = parque_id.loc[parque_presente]
+    result.loc[parque_presente, "Razão Social"] = parque_name.loc[parque_presente]
+
+    return result
+
 def preparar_ams(df: pd.DataFrame) -> pd.DataFrame:
     cliente = df["Cliente"].astype("string")
     result = df[
@@ -82,7 +247,11 @@ def preparar_ams(df: pd.DataFrame) -> pd.DataFrame:
     result[["Id", "Razao Social"]] = result["Cliente"].str.split(
         " - ", n=1, expand=True
     )
+    result[AMS_ORIGIN_ID_COLUMN] = result["Id"]
+    result[AMS_ORIGIN_NAME_COLUMN] = result["Razao Social"]
     result = result.drop(columns=["Cliente"])
+    mover_coluna(result, AMS_ORIGIN_NAME_COLUMN)
+    mover_coluna(result, AMS_ORIGIN_ID_COLUMN)
     mover_coluna(result, "Razao Social")
     mover_coluna(result, "Id")
     result["Data de compra"] = (
@@ -94,12 +263,29 @@ def preparar_ams(df: pd.DataFrame) -> pd.DataFrame:
     if "ano_reparo" not in result.columns:
         result["ano_reparo"] = pd.NA
 
-    result = result.sort_values(["ano_reparo"], na_position="last")
-    result["Id"] = (
-        result
-        .groupby("Número de Série")["Id"]
-        .transform("last")
+    result["_ordem_ams"] = range(len(result))
+    result = result.sort_values(
+        ["ano_reparo", "_ordem_ams"],
+        kind="stable",
+        na_position="last",
     )
+
+    group_keys = _ams_asset_keys(result)
+    serial_valido = result["Número de Série"].astype("string").str.strip().ne("")
+    if serial_valido.any():
+        conta_atual = (
+            result.loc[serial_valido]
+            .groupby(group_keys, sort=False, dropna=False)[
+                [AMS_ORIGIN_ID_COLUMN, AMS_ORIGIN_NAME_COLUMN]
+            ]
+            .transform(lambda values: values.iloc[-1])
+        )
+        result.loc[serial_valido, "Id"] = conta_atual[AMS_ORIGIN_ID_COLUMN]
+        result.loc[serial_valido, "Razao Social"] = conta_atual[
+            AMS_ORIGIN_NAME_COLUMN
+        ]
+
+    result = result.drop(columns=["_ordem_ams"])
     result["_presente_ams"] = True
 
     return result
@@ -144,7 +330,7 @@ def agrupar_ams(df: pd.DataFrame) -> pd.DataFrame:
     ]
     aggregations = {
         "Id": "last",
-        "Razao Social": "first",
+        "Razao Social": "last",
         "Nome do Material": "first",
         "FM Frota": "last",
         "# Notif.": "sum",

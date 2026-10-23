@@ -181,6 +181,9 @@ def show():
 
     if 'load_validation' not in st.session_state:
         st.session_state.load_validation = {}
+
+    if 'ams_multi_account' not in st.session_state:
+        st.session_state.ams_multi_account = pd.DataFrame()
     # endregion
     # ========================================================
 
@@ -287,6 +290,25 @@ def show():
             # ]
 
             if df_not_normalizer.empty:
+                df_parque_duplicado = (
+                    data_processing.detectar_maquinas_duplicadas_parque(df_pq)
+                )
+                st.session_state.parque_machine_duplicates = df_parque_duplicado
+                if not df_parque_duplicado.empty:
+                    st.error(
+                        f"Foram identificadas {len(df_parque_duplicado)} "
+                        "máquina(s) duplicadas no Parque Atual. Cada máquina "
+                        "deve aparecer uma única vez e estar vinculada a uma "
+                        "única conta atual antes da análise."
+                    )
+                    with st.expander("Máquinas duplicadas no Parque Atual"):
+                        st.dataframe(
+                            df_parque_duplicado,
+                            hide_index=True,
+                            width="stretch",
+                        )
+                    st.stop()
+
                 df_pq['Mensalidade c/Imp'] = round(df_pq['Mensalidade'] / (1-0.0925), 2) 
                 df_pq['Custo Reparo c/Imp'] = (
                     df_pq['Custo de Reparo'].fillna(0) * 1.4
@@ -412,25 +434,28 @@ def show():
             # st.divider()
 
 
-            # st.subheader('DF_AMS', divider='red')
-            df_series_mais_de_um_id = (
-                df_ams.groupby(["Número de Série", "Nome do Material"], as_index=False)
-                .agg(
-                    qtd_ids=("Id", "nunique"),
-                    ids=("Id", lambda x: list(x.dropna().unique()))
-                )
+            # ========================================================
+            # region AUDITORIA MULTI-CONTA AMS
+            # ========================================================
+            df_series_mais_de_um_id = data_processing.detectar_series_multiconta(
+                df_ams
             )
+            st.session_state.ams_multi_account = df_series_mais_de_um_id
 
-            # st.dataframe(df_series_mais_de_um_id)
-
-            df_series_mais_de_um_id = df_series_mais_de_um_id[
-                df_series_mais_de_um_id["qtd_ids"] > 1
-            ]
-
-            # st.dataframe(df_series_mais_de_um_id)
-
-            # st.write(df_series_mais_de_um_id['Número de Série'].value_counts())
-            # st.subheader('', divider='red')
+            if not df_series_mais_de_um_id.empty:
+                st.warning(
+                    f"Foram identificadas {len(df_series_mais_de_um_id)} "
+                    "série(s)/modelo associadas a múltiplas contas no histórico AMS. "
+                    "A origem de cada registro foi preservada para auditoria."
+                )
+                with st.expander("Séries associadas a múltiplas contas AMS"):
+                    st.dataframe(
+                        df_series_mais_de_um_id,
+                        hide_index=True,
+                        width="stretch",
+                    )
+            # endregion
+            # ========================================================
 
 
             # ========================================================
@@ -510,10 +535,12 @@ def show():
                 'Número do Equipamento',
                 'Material',
             ], inplace=True)
-            df_merge.rename(columns={
-                'Id_x': 'Id',
-                'Razao Social_x': 'Razão Social',
-            }, inplace=True)
+            df_merge = data_processing.consolidar_conta_atual(df_merge)
+            df_merge.drop(
+                columns=['Id_x', 'Razao Social_x'],
+                errors='ignore',
+                inplace=True,
+            )
 
 
             # ========================================================
@@ -551,8 +578,6 @@ def show():
             # endregion
             # ========================================================
 
-            df_merge['Id'] = df_merge['Id'].fillna(df_merge['Id_y'])
-            df_merge['Razão Social'] = df_merge['Razão Social'].fillna(df_merge['Razao Social_y'])
             df_merge['Descrição'] = df_merge['Descrição'].fillna(df_merge['Nome do Material'])
             df_merge['Grupo'] = df_merge['Grupo'].fillna('Não informado')
             df_merge['Status da Ferramenta'] = (
@@ -673,7 +698,14 @@ def show():
         if dfs_sap_group:
             pass
             # df_sap_group = pd.concat(dfs_sap_group)
-            costumers = list(df_ams['Razao Social'].unique())
+            customer_name_column = (
+                data_processing.AMS_ORIGIN_NAME_COLUMN
+                if data_processing.AMS_ORIGIN_NAME_COLUMN in df_ams.columns
+                else 'Razao Social'
+            )
+            costumers = list(
+                df_ams[customer_name_column].dropna().unique()
+            )
             df_sap_group = data_processing.preparar_sap_group(pd.concat(dfs_sap_group), costumers)
             df_sap_group.rename(columns={'Tool Type': 'Descrição'}, inplace=True)
             df_sap_group, df_not_normalizer = normalizar_itens(df_sap_group)
@@ -723,7 +755,8 @@ def show():
         st.session_state.df_pq = pd.DataFrame()
         st.session_state.df_ams = pd.DataFrame()
         st.session_state.df_sap_group = pd.DataFrame()    
-        st.session_state.df_sap_split = pd.DataFrame()            
+        st.session_state.df_sap_split = pd.DataFrame()
+        st.session_state.ams_multi_account = pd.DataFrame()
 
 
 
