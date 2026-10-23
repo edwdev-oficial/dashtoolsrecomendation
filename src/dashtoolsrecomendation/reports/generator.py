@@ -2398,7 +2398,7 @@ class _ReportRenderer:
                             .eq("Troca prioritária")
                             .sum()
                         ),
-                        "Classificação relativa ao conjunto filtrado",
+                        "Classificação no universo analítico",
                     ),
                     (
                         f"CUSTO CONCENTRADO NO TOP {top_quantity}",
@@ -2894,10 +2894,10 @@ class _ReportRenderer:
         y = self._methodology_heading("A leitura correta", y)
         y = self._methodology_bullets(
             [
-                "Quanto maior o índice, maior a prioridade relativa dentro do parque analisado.",
+                "Quanto maior o índice, maior a prioridade relativa dentro do universo analítico.",
                 "O índice não representa probabilidade de falha ou vida útil restante.",
                 "A classificação deve ser confirmada em campo, considerando aplicação, condição física, reserva e criticidade operacional.",
-                "Se o parque ou os filtros mudarem, as posições também podem mudar.",
+                "Filtros visuais não recalculam o índice; mudanças no universo analítico, período ou data de corte podem alterar as posições.",
             ],
             y,
         )

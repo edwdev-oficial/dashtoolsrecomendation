@@ -257,8 +257,10 @@ def preparar_base_maquinas(
 ) -> pd.DataFrame:
     """Cria uma linha analítica por máquina para diagnóstico e priorização.
 
-    O índice de prioridade é relativo ao conjunto filtrado e combina idade,
-    frequência, custo e recorrência. Ele não estima falha futura nem economia.
+    O índice de prioridade é relativo ao universo analítico fornecido e combina
+    idade, frequência, custo e recorrência. Filtros visuais devem ser aplicados
+    somente depois deste cálculo, para preservar percentis e recomendações.
+    Ele não estima falha futura nem economia.
     """
     weights.validate()
     anos_validos = sorted({int(ano) for ano in anos if pd.notna(ano)})
@@ -437,6 +439,57 @@ def preparar_base_maquinas(
         ["Índice de prioridade", "Custo com impostos", "Reparações no período"],
         ascending=False,
     ).reset_index(drop=True)
+
+
+def filtrar_base_maquinas(
+    base: pd.DataFrame,
+    selecao: pd.DataFrame,
+) -> pd.DataFrame:
+    """Recorta uma base já ranqueada sem recalcular o índice de prioridade.
+
+    A correspondência usa número de série + modelo, a mesma chave lógica usada
+    na preparação analítica. A ordem do ranking original é preservada.
+    """
+    if base.empty or selecao.empty:
+        return base.iloc[0:0].copy().reset_index(drop=True)
+
+    base_work = base.copy()
+    selection_work = selecao.copy()
+    base_work["_serie_filtro"] = _serie_canonica(base_work)
+    selection_work["_serie_filtro"] = _serie_canonica(selection_work)
+    base_work[MODEL_KEY_COLUMN] = _modelo_chave(
+        _text(base_work, "Modelo", "Não identificado")
+    )
+    selection_work[MODEL_KEY_COLUMN] = _modelo_chave(
+        _text(selection_work, "Modelo", "Não identificado")
+    )
+
+    selection_keys = set(
+        zip(
+            _column(selection_work, "_serie_filtro"),
+            _column(selection_work, MODEL_KEY_COLUMN),
+        )
+    )
+    valid_keys = {
+        key for key in selection_keys if pd.notna(key[0]) and pd.notna(key[1])
+    }
+    mask = pd.Series(
+        [
+            (serie, modelo) in valid_keys
+            for serie, modelo in zip(
+                _column(base_work, "_serie_filtro"),
+                _column(base_work, MODEL_KEY_COLUMN),
+            )
+        ],
+        index=base_work.index,
+        dtype="bool",
+    )
+
+    return (
+        base_work.loc[mask]
+        .drop(columns=["_serie_filtro", MODEL_KEY_COLUMN])
+        .reset_index(drop=True)
+    )
 
 
 def resumo_executivo(base: pd.DataFrame) -> dict[str, float]:

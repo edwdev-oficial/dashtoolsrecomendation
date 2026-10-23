@@ -5,6 +5,7 @@ import pandas as pd
 
 from dashtoolsrecomendation.components import dashboard_filters
 from dashtoolsrecomendation.components.dashboard_filters import (
+    aplicar_escopo_analitico,
     aplicar_selecoes,
     filtrar_termino_contrato,
 )
@@ -159,3 +160,23 @@ def test_tipo_nao_reduz_faixa_de_datas_do_filtro_contratual(monkeypatch) -> None
     assert result["id"].tolist() == [1, 2]
     assert captured["filter"]["id"].tolist() == [1, 2, 3]
     assert captured["description"]["id"].tolist() == [1, 2, 3]
+
+def test_escopo_analitico_separa_elegibilidade_de_filtros_visuais() -> None:
+    base = pd.DataFrame(
+        {
+            "id": [1, 2, 3, 4],
+            "_presente_parque": [True, True, False, True],
+            "Status da Ferramenta": ["Ativo", "Roubado", "Ativo", "Ativo"],
+            "Modelo": ["A", "B", "C", "D"],
+        }
+    )
+
+    padrao = aplicar_escopo_analitico(base)
+    ampliado = aplicar_escopo_analitico(
+        base,
+        include_ams_only=True,
+        include_stolen=True,
+    )
+
+    assert padrao["id"].tolist() == [1, 4]
+    assert ampliado["id"].tolist() == [1, 2, 3, 4]

@@ -24,12 +24,14 @@
 
 ## Índice de prioridade
 
-O índice combina percentis relativos ao conjunto filtrado:
+O índice combina percentis relativos ao universo analítico elegível:
 
 - idade: 25%;
 - frequência por ano observado: 30%;
 - custo: 30%;
 - recorrência em anos diferentes: 15%.
+
+Filtros visuais são aplicados depois do ranking e, portanto, não alteram percentis, índice ou recomendação de uma máquina. Apenas alterações no universo analítico, na janela histórica ou na data de corte podem recalcular o ranking.
 
 O índice serve para ordenar a avaliação comercial e técnica. Ele não representa previsão de falha ou economia garantida.
 

@@ -480,10 +480,10 @@ def page_2(c: canvas.Canvas) -> None:
     draw_bullets(
         c,
         [
-            "Quanto maior o índice, maior a prioridade relativa dentro do parque analisado.",
+            "Quanto maior o índice, maior a prioridade relativa dentro do universo analítico.",
             "O índice não representa probabilidade de falha ou vida útil restante.",
             "A classificação pode ser confirmada em campo, considerando aplicação, condição física, disponibilidade de reserva e criticidade operacional.",
-            "O resultado é relativo ao conjunto analisado. Se o parque ou os filtros mudarem, as posições também podem mudar.",
+            "O índice é relativo ao universo analítico. Filtros visuais apenas recortam a exibição e não alteram as posições.",
         ],
         MARGIN_X,
         275,
@@ -646,7 +646,7 @@ def page_4(c: canvas.Canvas) -> None:
         CONTENT_W,
         59,
         "Importante",
-        "O índice deve ser comparado dentro do mesmo estudo e da mesma população. Não é recomendado comparar diretamente índices produzidos com parques ou filtros diferentes.",
+        "O índice deve ser comparado dentro do mesmo estudo e do mesmo universo analítico. Mudanças de universo, período histórico ou data de corte podem alterar o ranking.",
         red_fill=True,
     )
     c.showPage()

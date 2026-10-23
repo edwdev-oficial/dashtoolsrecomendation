@@ -146,6 +146,47 @@ class RenewalAnalysisTests(unittest.TestCase):
 
         self.assertEqual(recomendacao, "Manter")
 
+    def test_filtro_visual_preserva_indice_calculado_no_universo_completo(self):
+        base_universo = renewal_analysis.preparar_base_maquinas(
+            self.parque,
+            self.ams,
+            [2024, 2025, 2026],
+            data_corte=pd.Timestamp("2026-07-21"),
+            tax_factor=1.4,
+        )
+        selecao = self.parque[self.parque["Número de Série"].eq("1")]
+
+        base_filtrada = renewal_analysis.filtrar_base_maquinas(
+            base_universo,
+            selecao,
+        )
+        recalculada_no_recorte = renewal_analysis.preparar_base_maquinas(
+            selecao,
+            self.ams,
+            [2024, 2025, 2026],
+            data_corte=pd.Timestamp("2026-07-21"),
+            tax_factor=1.4,
+        )
+
+        original = base_universo.set_index("Número de Série").loc["1"]
+        filtrada = base_filtrada.set_index("Número de Série").loc["1"]
+        recalculada = recalculada_no_recorte.set_index("Número de Série").loc["1"]
+        columns = [
+            "Percentil idade",
+            "Percentil frequência",
+            "Percentil custo",
+            "Percentil recorrência",
+            "Índice de prioridade",
+            "Recomendação",
+        ]
+
+        self.assertEqual(len(base_filtrada), 1)
+        self.assertEqual(filtrada[columns].to_dict(), original[columns].to_dict())
+        self.assertNotEqual(
+            filtrada["Índice de prioridade"],
+            recalculada["Índice de prioridade"],
+        )
+
     def test_resumo_usa_todo_o_parque_como_denominador(self):
         base = renewal_analysis.preparar_base_maquinas(
             self.parque,
