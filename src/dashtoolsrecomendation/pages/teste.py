@@ -725,13 +725,23 @@ def show():
 
         st.divider()
 
-        base = renewal_analysis.preparar_base_maquinas(
-            df_filtrado,
+        universo_ranking = dashboard_filters.aplicar_escopo_analitico(
+            df_com_periodo,
+            include_ams_only=bool(
+                st.session_state.get(dashboard_filters.INCLUDE_AMS_KEY, False)
+            ),
+            include_stolen=bool(
+                st.session_state.get(dashboard_filters.INCLUDE_STOLEN_KEY, False)
+            ),
+        )
+        base_universo = renewal_analysis.preparar_base_maquinas(
+            universo_ranking,
             df_ams,
             anos_selecionados,
             data_corte=data_corte,
             tax_factor=fator_impostos,
         )
+        base = renewal_analysis.filtrar_base_maquinas(base_universo, df_filtrado)
         series = create_filter.create_filter(base, 'Número de série', 'Número de série', False, 'multiselect')
         if series:
             base = base[base['Número de série'].isin(series)]

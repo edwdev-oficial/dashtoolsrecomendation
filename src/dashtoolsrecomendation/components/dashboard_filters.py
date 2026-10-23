@@ -238,6 +238,29 @@ def _show_active_filters(descriptions: list[str]) -> None:
         st.sidebar.caption("Nenhum — exibindo todos os registros elegíveis.")
 
 
+def aplicar_escopo_analitico(
+    df: pd.DataFrame,
+    *,
+    include_ams_only: bool = False,
+    include_stolen: bool = False,
+) -> pd.DataFrame:
+    """Aplica apenas regras que definem o universo usado no ranking.
+
+    Filtros visuais de cliente, grupo, modelo, idade, série e contrato não
+    pertencem a este escopo e, portanto, não devem recalcular percentis.
+    """
+    result = df.copy()
+
+    if "_presente_parque" in result.columns and result["_presente_parque"].any():
+        if not include_ams_only:
+            result = result[result["_presente_parque"].fillna(False)]
+
+    if "Status da Ferramenta" in result.columns and not include_stolen:
+        result = result[result["Status da Ferramenta"] != "Roubado"]
+
+    return result.reset_index(drop=True)
+
+
 def aplicar_filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     st.sidebar.markdown("### Filtros do parque")
     st.sidebar.button(
@@ -250,6 +273,8 @@ def aplicar_filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
     options_base = df.copy()
     descriptions: list[str] = []
+    include_ams_only = False
+    include_stolen = False
 
     if "_presente_parque" in options_base.columns and options_base["_presente_parque"].any():
         include_ams_only = st.sidebar.toggle(
@@ -261,19 +286,21 @@ def aplicar_filtros(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
                 "Ative para auditar máquinas que aparecem somente no histórico AMS."
             ),
         )
-        if not include_ams_only:
-            options_base = options_base[options_base["_presente_parque"].fillna(False)]
-        else:
+        if include_ams_only:
             descriptions.append("Registros somente do AMS incluídos")
 
     if "Status da Ferramenta" in options_base.columns:
         include_stolen = st.sidebar.toggle(
             "Incluir baixadas por B.O.", value=False, key=INCLUDE_STOLEN_KEY
         )
-        if not include_stolen:
-            options_base = options_base[options_base["Status da Ferramenta"] != "Roubado"]
-        else:
+        if include_stolen:
             descriptions.append("Baixadas por B.O. incluídas")
+
+    options_base = aplicar_escopo_analitico(
+        options_base,
+        include_ams_only=include_ams_only,
+        include_stolen=include_stolen,
+    )
 
     selections: dict[str, FilterValue] = {}
     cascading_options = options_base

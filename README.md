@@ -25,12 +25,14 @@ A análise de manutenção considera, por padrão, somente os anos a partir de *
 
 ## Índice de prioridade
 
-O índice é relativo ao conjunto filtrado e combina:
+O índice é calculado no universo analítico elegível e combina:
 
 - idade: 25%;
 - frequência observada: 30%;
 - custo observado: 30%;
 - recorrência em anos diferentes: 15%.
+
+Filtros visuais de cliente, grupo, modelo, idade, série e contrato apenas recortam a exibição; eles não recalculam os percentis, o índice ou a recomendação. Os controles de escopo que incluem registros somente do AMS ou baixadas por B.O. podem redefinir o universo analítico.
 
 Ele serve para ordenar a investigação comercial e técnica. Não é uma previsão de falha, disponibilidade ou economia futura.
 

@@ -513,13 +513,23 @@ def show() -> None:
         return
 
 
-    base = renewal_analysis.preparar_base_maquinas(
-        df_filtrado,
+    universo_ranking = dashboard_filters.aplicar_escopo_analitico(
+        df_com_periodo,
+        include_ams_only=bool(
+            st.session_state.get(dashboard_filters.INCLUDE_AMS_KEY, False)
+        ),
+        include_stolen=bool(
+            st.session_state.get(dashboard_filters.INCLUDE_STOLEN_KEY, False)
+        ),
+    )
+    base_universo = renewal_analysis.preparar_base_maquinas(
+        universo_ranking,
         df_ams,
         anos_selecionados,
         data_corte=data_corte,
         tax_factor=fator_impostos,
     )
+    base = renewal_analysis.filtrar_base_maquinas(base_universo, df_filtrado)
 
 
     if base.empty:
@@ -818,7 +828,7 @@ def show() -> None:
                 (
                     "TROCA PRIORITÁRIA",
                     _numero(resumo["troca_prioritaria"]),
-                    "Classificação relativa ao conjunto filtrado",
+                    "Classificação no universo analítico",
                 ),
                 # (
                 #     f"CUSTO CONCENTRADO NO TOP {top_20}",
@@ -1147,7 +1157,7 @@ def show() -> None:
                 (
                     "MÁQUINAS NO CENÁRIO",
                     _numero(scenario["maquinas"]),
-                    "Maior prioridade no conjunto filtrado",
+                    "Maior índice entre as máquinas filtradas",
                 ),
                 (
                     "REPARAÇÕES CONCENTRADAS",
@@ -1215,11 +1225,13 @@ def show() -> None:
         ):
             st.markdown(
                 """
-                O índice é relativo ao parque filtrado e combina quatro dimensões:
-                **idade (25%)**, **frequência observada (30%)**, **custo observado
-                (30%)** e **recorrência em anos diferentes (15%)**. Ele serve para
-                ordenar a investigação técnica. Não é uma previsão de falha e não
-                substitui avaliação condição física.
+                O índice é calculado no universo analítico elegível e combina quatro
+                dimensões: **idade (25%)**, **frequência observada (30%)**, **custo
+                observado (30%)** e **recorrência em anos diferentes (15%)**. Os
+                filtros visuais apenas selecionam quais máquinas são exibidas e não
+                recalculam percentis, índice ou recomendação. Ele serve para ordenar
+                a investigação técnica. Não é uma previsão de falha e não substitui
+                a avaliação da condição física.
                 """
             )
 
