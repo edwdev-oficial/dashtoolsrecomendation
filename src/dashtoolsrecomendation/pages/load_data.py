@@ -6,9 +6,11 @@ import streamlit as st
 from io import BytesIO
 import warnings
 
+from dashtoolsrecomendation import auth
 from dashtoolsrecomendation.assets.colunas import colunas
 from dashtoolsrecomendation.services import (
     data_processing,
+    load_validation,
     get_pq_normalizado,
     get_pq_normalizado2,
     write_xls
@@ -65,6 +67,94 @@ def normalizar_itens(df):
 def sum_column(df, colum):
     return df[colum].sum()
 
+
+def _format_account(account: dict[str, str]) -> str:
+    account_id = account.get("id", "")
+    account_name = account.get("nome", "")
+    return f"{account_id} - {account_name}" if account_name else account_id
+
+
+def render_load_validation(validation: dict) -> None:
+    st.subheader("Validação da carga", divider="red")
+
+    status = validation["status"]
+    if status == "ok":
+        st.success(
+            "Carga validada: contas do parque e filtros AMS estão consistentes."
+        )
+    elif status == "warning":
+        st.warning(
+            "A carga pode ser utilizada, mas possui ressalvas que devem ser revisadas."
+        )
+    else:
+        st.error(
+            "Foram encontradas divergências críticas entre o parque e os arquivos AMS."
+        )
+
+    for message in validation["errors"]:
+        st.error(message)
+    for message in validation["warnings"]:
+        st.warning(message)
+
+    missing_accounts = validation["contas_ausentes_ams"]
+    extra_accounts = validation["contas_extras_ams"]
+
+    if missing_accounts:
+        st.markdown("**Contas do parque ausentes no AMS:**")
+        for account in missing_accounts:
+            st.write(f"- {_format_account(account)}")
+
+    if extra_accounts:
+        st.markdown("**Contas presentes no AMS e sem arquivo de parque:**")
+        for account in extra_accounts:
+            st.write(f"- {_format_account(account)}")
+
+    with st.expander("Detalhes da validação dos arquivos AMS"):
+        if validation["detalhes_ams"]:
+            st.dataframe(
+                pd.DataFrame(validation["detalhes_ams"]),
+                hide_index=True,
+                width="stretch",
+            )
+        if validation["anos_duplicados"]:
+            st.write(
+                "Anos duplicados: "
+                + ", ".join(map(str, validation["anos_duplicados"]))
+            )
+        if validation["anos_ausentes"]:
+            st.write(
+                "Lacunas na sequência de anos: "
+                + ", ".join(map(str, validation["anos_ausentes"]))
+            )
+        if validation["arquivos_sem_metadados"]:
+            st.write("Arquivos sem rodapé de filtros identificado:")
+            for filename in validation["arquivos_sem_metadados"]:
+                st.write(f"- {filename}")
+
+    if not validation["bloqueante"]:
+        return
+
+    if not auth.has_role("adm"):
+        st.stop()
+
+    override_key = f"load_validation_override_{validation['fingerprint']}"
+    override = st.checkbox(
+        "Continuar com ressalva (administrador)",
+        value=False,
+        key=override_key,
+        help=(
+            "Use somente quando a divergência for conhecida e intencional. "
+            "O Dashboard e os relatórios refletirão exatamente os dados carregados."
+        ),
+    )
+    if not override:
+        st.stop()
+
+    st.warning(
+        "Carga liberada com ressalva pelo administrador. "
+        "As divergências permanecem registradas nesta sessão."
+    )
+
 # endregion
 # ========================================================
 
@@ -88,6 +178,9 @@ def show():
 
     if 'df_sap_split' not in st.session_state:
         st.session_state.df_sap_split = pd.DataFrame()    
+
+    if 'load_validation' not in st.session_state:
+        st.session_state.load_validation = {}
     # endregion
     # ========================================================
 
@@ -123,6 +216,7 @@ def show():
 
         dfs_pq = []
         dfs_ams = []
+        ams_sources = []
         dfs_sap_group = []
         dfs_sap_split = []
 
@@ -142,12 +236,17 @@ def show():
                 if 'ano_reparo' not in df.columns:
                     df['ano_reparo'] = int(file.name.replace('.xlsx', '').split('_')[3])
                 dfs_ams.append(df)
+                ams_sources.append((file.name, df.copy()))
             if file.name.startswith('Tools with repairs info'):
                 df = carregar_excel(file.getvalue())
                 dfs_sap_group.append(df)
             if file.name.startswith('G_GMRRPCOPA_AMS_KF2_W2'):
                 df = carregar_excel(file.getvalue())
                 dfs_sap_split.append(df)
+
+        validation = load_validation.validar_carga(dfs_pq, ams_sources)
+        st.session_state.load_validation = validation
+        render_load_validation(validation)
         # endregion
         # ========================================================
 
